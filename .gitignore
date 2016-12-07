@@ -1,0 +1,7 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+/inst/paper
+/inst/draft
+admin.R
