@@ -99,6 +99,7 @@ dashboardPage(
       ),
       tabItem("Visualization",
               actionButton("VarSel_EIC_bis","Plot the selection"),
+              actionButton("VarSel_EIC_report","Select for report"),
               checkboxInput("VarSel_eic_normalize","Use same scale for eic and tic",T),
               uiOutput("scroreplot_cross"),
               column(6,
@@ -121,10 +122,16 @@ dashboardPage(
 
       ),
       tabItem("Report",
-              checkboxGroupInput("report_content","report content",choices=c("TICs","bkg spectrum","spectrums","elucidation"),selected="TICs"),
-              radioButtons('format', 'Document format', c('PDF', 'HTML', 'Word'),
-                           inline = TRUE),
-              downloadButton("Report")
+              column(3,
+                     uiOutput("report_choices"),
+                     radioButtons('format', 'Document format', c('PDF', 'HTML', 'Word'),
+                                  inline = TRUE),
+                     downloadButton("Report")
+                     ),
+              column(9,
+                     uiOutput("report_preview_choices"),
+                     plotOutput("report_preview")
+                     )
               ),
       tabItem("About",
               includeMarkdown("README.md")

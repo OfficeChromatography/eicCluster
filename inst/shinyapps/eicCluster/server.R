@@ -23,9 +23,10 @@ library(readMzXmlData)
 library(tsne)
 
 options(shiny.maxRequestSize=1000*1024^2)
-source("functions.R")
+
 
 server <- function(input, output,session) {
+  source("functions.R") ## inside to reload faster
 
   ## reactiveValues
   index <- reactiveValues(index=1,cond=1,last=1)
@@ -37,7 +38,11 @@ server <- function(input, output,session) {
     index$last = 1
   })
 
-
+  reported <- reactiveValues(l = list())
+  observeEvent(input$VarSel_EIC_report,{
+    reported$l[[length(reported$l)+1]] = list(x=VarSel_selected$x,y=VarSel_selected$y,index=VarSel_selected$index)
+    print(str(reported$l))
+  })
 
   ## observeEvent
   range.mz <- reactiveValues(x = NULL)
@@ -88,7 +93,6 @@ server <- function(input, output,session) {
     range.time$x[1] = 1
     range.time$x[2] = length(data.ls())/length(cond())
   })
-
 
   range.time <- reactiveValues(x = NULL)
   observeEvent(input$dblclick.VarSel_tic, {
@@ -325,7 +329,7 @@ server <- function(input, output,session) {
     par(mar=c(5, 4, 3, 5))
     plot(x=x,y=apply(data.VarSel$eic,2,sum),type="l",xlab="time (min)",ylab="Intensity",xaxt="n")
 
-    axis(side = 1,at=seq(1,nrow(data.VarSel$eic),length.out = 10),
+    axis(side = 1,at=seq(range.time$x[1],range.time$x[2],length.out = 10),
          labels = round(seq(getTime(data,x[1]*length(cond())),getTime(data,x[length(x)]*length(cond())),length.out = 10),2))
     if(!is.null(VarSel_selected$index)){
       par(new=T)
@@ -419,4 +423,60 @@ server <- function(input, output,session) {
     text(x=df[1:10,1],y=df[1:10,2],labels=round(df[1:10,1],4),pos=3)
   })
 
+  output$report_choices = renderUI({
+    validate(need(length(reported$l) > 0 , "select at least a cluster"))
+    choices = seq(length(reported$l))
+    checkboxGroupInput("report_choices","Report include",choices = choices)
+  })
+  output$report_preview_choices = renderUI({
+    validate(need(length(reported$l) > 0 , "select at least a cluster"))
+    choices = seq(length(reported$l))
+    selectizeInput("report_preview_choices","Report include",choices = choices)
+  })
+  output$report_preview = renderPlot({
+    i = reported$l[[as.numeric(input$report_preview_choices)]]
+    Int <- apply(data.VarSel$eic,1,sum)
+    rbPal <- colorRampPalette(c('blue','red'))
+    Col <- rbPal(10)[as.numeric(cut(log10(Int),breaks = 10))]
+      plot(data.VarSel$model,type="n",xlab="",ylab="")
+      text(data.VarSel$model,labels=rownames(data.VarSel$eic),col=Col,cex = 0.5)
+    title(main=data.VarSel$algo,xlab = "dimension 1",ylab="dimension 2")
+    ## add the scoreplot_cross if applicable
+    # if(!is.null(input$scroreplot_cross)){
+    #   text(x=data.VarSel$model[input$scroreplot_cross,1],y=data.VarSel$model[input$scroreplot_cross,2],labels="X",col="darkgreen",cex=3)
+    # }
+    ## add the contour
+    my.cols <- rev(RColorBrewer::brewer.pal(11, "RdYlBu"))
+    z <- MASS::kde2d(data.VarSel$model[,1], data.VarSel$model[,2], n=50)
+    contour(z, drawlabels=FALSE, nlevels=11, col=my.cols, add=TRUE)
+
+    ## add the selected zone if aplicable
+      symbols(x=mean(i$x),y=mean(i$y),
+              rectangles = rbind(c(i$x[2]-i$x[1],i$y[2]-i$y[1])),
+              add=T,inches = F,fg="darkgreen",lwd=2)
+  })
+
+  output$Report <- downloadHandler(
+    filename = function() {
+      paste('my-report', sep = '.', switch(
+        input$format, PDF = 'pdf', HTML = 'html', Word = 'docx'
+      ))
+    },
+    content = function(file) {
+      src <- normalizePath('report.Rmd')
+
+      # temporarily switch to the temp dir, in case you do not have write
+      # permission to the current working directory
+      # owd <- setwd(tempdir())
+      # on.exit(setwd(owd))
+      # file.copy(src, 'report.Rmd')
+
+      library(rmarkdown)
+      out <- render('report.Rmd', switch(
+        input$format,
+        PDF = pdf_document(), HTML = html_document(), Word = word_document()
+      ))
+      file.rename(out, file)
+    }
+  )
 }
