@@ -37,6 +37,7 @@ dashboardPage(
       # First tab content
       tabItem(tabName = "Input",
               fileInput("file_MS","mzXML file"),
+              checkboxInput("file_demo","Use demo file",F),
               column(6,
                      verbatimTextOutput("meta")
                      ),
@@ -98,10 +99,15 @@ dashboardPage(
               )
       ),
       tabItem("Visualization",
-              actionButton("VarSel_EIC_bis","Plot the selection"),
-              actionButton("VarSel_EIC_report","Select for report"),
-              checkboxInput("VarSel_eic_normalize","Use same scale for eic and tic",T),
-              uiOutput("scroreplot_cross"),
+              column(12,
+                     div(style="display: inline-block;vertical-align:top; width: 150px;",actionButton("VarSel_EIC_bis","Plot the selection")),
+                     div(style="display: inline-block;vertical-align:top; width: 150px;",actionButton("VarSel_EIC_report","Select for report")),
+                     div(style="display: inline-block;vertical-align:top; width: 150px;",checkboxInput("VarSel_eic_normalize","Use same scale for eic and tic",T)),
+                     div(style="display: inline-block;vertical-align:top; width: 150px;",uiOutput("scroreplot_cross")),
+                     div(style="display: inline-block;vertical-align:top; width: 150px;",actionButton("VarSel_EIC_exclude","Exclude from plots")),
+                     div(style="display: inline-block;vertical-align:top; width: 150px;",actionButton("VarSel_EIC_exclude_reset","Reset the exclusion"))
+                     ),
+
               column(6,
                      plotOutput("VarSel_scorePlot",dblclick = "dblclick.VarSel_scorePlot",
                                 brush = brushOpts(id = "brush.VarSel_scorePlot",resetOnNew = TRUE),height = "1200"),

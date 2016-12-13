@@ -1,5 +1,5 @@
 ---
-title: "Orbitrap Preparation"
+title: "eicCluster report"
 date: "`r Sys.Date()`"
 header-includes:
      - \usepackage{longtable}
@@ -75,6 +75,8 @@ for(i in as.numeric(input$report_choices)){
 
     legend("topright",legend = leg,lty=1,col=col,cex = 0.7)
     
+    index.max = x[which.max(truc)]
+    
   ## Ion cluster
     par(yaxs="i", xaxs="i",mar=c(3, 3, 2, 0.5),mgp=c(1.5,0.5,0))
     df <- data.frame(x = as.numeric(rownames(data.VarSel$eic[i$index,])),y = apply(data.VarSel$eic[i$index,],1,sum))
@@ -90,7 +92,7 @@ for(i in as.numeric(input$report_choices)){
     
   ## full scan at maximum
     data = data.ls()
-    ind = seq(as.numeric(input$VarSel_mode),length(data),by=length(cond()))[which.max(truc)] ## truc refer to the TIC EIC spectrum defined before
+    ind = seq(as.numeric(input$VarSel_mode),length(data),by=length(cond()))[index.max] ## truc refer to the TIC EIC spectrum defined before
     df = data.frame(x=data[[ind]]$spectrum$mass,y=data[[ind]]$spectrum$intensity)
     df <- df[order(df[,2],decreasing = T),]
     plot(df,type="h",xlim=range.mz_full(),ylab="intensity",xlab="mz",ylim=c(0,df[1,2]*1.2),main="Full scan at cluster EIC maximum")

@@ -29,7 +29,7 @@ server <- function(input, output,session) {
   source("functions.R") ## inside to reload faster
 
   ## reactiveValues
-  index <- reactiveValues(index=1,cond=1,last=1)
+  index <- reactiveValues(index=1,cond=1,last=1) # use to explore the tic and view a mass spectrum by clicking on it
   observeEvent(input$click.VarSel_eic,{
     data = data.ls()
     index$index = seq(as.numeric(input$VarSel_mode),length(data),by=length(cond()))[round(input$click.VarSel_eic$x)]
@@ -38,14 +38,14 @@ server <- function(input, output,session) {
     index$last = 1
   })
 
-  reported <- reactiveValues(l = list())
+  reported <- reactiveValues(l = list()) # use to store cluster for report
   observeEvent(input$VarSel_EIC_report,{
     reported$l[[length(reported$l)+1]] = list(x=VarSel_selected$x,y=VarSel_selected$y,index=VarSel_selected$index)
     print(str(reported$l))
   })
 
   ## observeEvent
-  range.mz <- reactiveValues(x = NULL)
+  range.mz <- reactiveValues(x = NULL) # to zoom inside the mass spectrum, react to a few interaction but easy
   range.mz_full = reactive({
     c(min(unlist(lapply(data.ls(),function(x){x$metaData$lowMz}))),
       max(unlist(lapply(data.ls(),function(x){x$metaData$highMz})))
@@ -87,14 +87,13 @@ server <- function(input, output,session) {
     }
   })
 
-  data.VarSel <- reactiveValues(eic=NULL,model=NULL,algo=NULL) # this one contain a lot of info so the observeEvent are separated
-
+  data.VarSel <- reactiveValues(eic=NULL,model=NULL,algo=NULL,keep=NULL) # triggered by the cluster buttonS. this one contain a lot of info so the observeEvent are separated
   observeEvent(data.ls(),{
     range.time$x[1] = 1
     range.time$x[2] = length(data.ls())/length(cond())
   })
 
-  range.time <- reactiveValues(x = NULL)
+  range.time <- reactiveValues(x = NULL) # to zoom inside the TIC
   observeEvent(input$dblclick.VarSel_tic, {
     data = data.ls()
     brush <- input$brush.VarSel_tic
@@ -107,7 +106,7 @@ server <- function(input, output,session) {
     }
   })
 
-  VarSel_ranges <- reactiveValues(x = NULL, y = NULL)
+  VarSel_ranges <- reactiveValues(x = NULL, y = NULL) # to zoom inside the scoreplot
   observeEvent(input$dblclick.VarSel_scorePlot, {
     brush <- input$brush.VarSel_scorePlot
     if (!is.null(brush)) {
@@ -120,7 +119,7 @@ server <- function(input, output,session) {
     }
   })
 
-  VarSel_selected <- reactiveValues(index=c(),x = NULL,y = NULL)
+  VarSel_selected <- reactiveValues(index=c(),x = NULL,y = NULL) # triggered when cluster selected
   observeEvent(input$VarSel_EIC_bis, {
     brush <- input$brush.VarSel_scorePlot
     if (!is.null(brush)) {
@@ -132,8 +131,12 @@ server <- function(input, output,session) {
       VarSel_selected$y <- c(brush$ymin, brush$ymax)
     }
   })
-
-
+  observeEvent(input$VarSel_EIC_exclude, {
+    data.VarSel$keep[VarSel_selected$index] = F
+  })
+  observeEvent(input$VarSel_EIC_exclude_reset, {
+    data.VarSel$keep = rep(T,nrow(data.VarSel$eic))
+  })
 
   ## uiOutput
   output$VarSel_mode <- renderUI({
@@ -143,12 +146,19 @@ server <- function(input, output,session) {
   ## Input
 
   data.ls <- reactive({
-    validate(
-      need(!is.null(input$file_MS),"Upload a mzXML file")
-    )
-    withProgress(message = "Reading file", value=0, {
-      readMzXmlFile(input$file_MS$datapath)
-    })
+    if(input$file_demo){
+      withProgress(message = "Reading file", value=0, {
+        readMzXmlFile("www/161102_pos_neg_R521_arylamineoptitune.mzXML")
+      })
+    }else{
+      validate(
+        need(!is.null(input$file_MS),"Upload a mzXML file")
+      )
+      withProgress(message = "Reading file", value=0, {
+        readMzXmlFile(input$file_MS$datapath)
+      })
+    }
+
   })
 
   cond <- reactive({
@@ -219,6 +229,7 @@ server <- function(input, output,session) {
       }
     })
     data.VarSel$eic = do.call(rbind,data.ext)
+    data.VarSel$keep = rep(T,nrow(data.VarSel$eic))
   })
 
   output$VarSel_EIC_dim <- renderUI({
@@ -290,7 +301,7 @@ server <- function(input, output,session) {
     validate(
       need(!is.null(data.VarSel$model),"Please do the Clusterisation")
     )
-    Int <- apply(data.VarSel$eic,1,sum)
+    Int <- apply(data.VarSel$eic[data.VarSel$keep,],1,sum)
     rbPal <- colorRampPalette(c('blue','red'))
     Col <- rbPal(10)[as.numeric(cut(log10(Int),breaks = 10))]
 
@@ -299,7 +310,7 @@ server <- function(input, output,session) {
     }else{
       plot(data.VarSel$model,type="n",xlim = VarSel_ranges$x, ylim = VarSel_ranges$y,xlab="",ylab="")
     }
-    text(data.VarSel$model,labels=rownames(data.VarSel$eic),col=Col)
+    text(data.VarSel$model[data.VarSel$keep,],labels=rownames(data.VarSel$eic)[data.VarSel$keep],col=Col)
     title(main=data.VarSel$algo,xlab = "dimension 1",ylab="dimension 2")
     ## add the scoreplot_cross if applicable
     if(!is.null(input$scroreplot_cross)){
@@ -327,7 +338,7 @@ server <- function(input, output,session) {
     data = data.ls()
     x=range.time$x[1]:range.time$x[2]
     par(mar=c(5, 4, 3, 5))
-    plot(x=x,y=apply(data.VarSel$eic,2,sum),type="l",xlab="time (min)",ylab="Intensity",xaxt="n")
+    plot(x=x,y=apply(data.VarSel$eic[data.VarSel$keep,],2,sum),type="l",xlab="time (min)",ylab="Intensity",xaxt="n")
 
     axis(side = 1,at=seq(range.time$x[1],range.time$x[2],length.out = 10),
          labels = round(seq(getTime(data,x[1]*length(cond())),getTime(data,x[length(x)]*length(cond())),length.out = 10),2))
@@ -389,6 +400,7 @@ server <- function(input, output,session) {
       need(!is.null(data.VarSel$model),"Please do the Clusterisation")
     )
     df <- data.frame(x = as.numeric(rownames(data.VarSel$eic)),y = apply(data.VarSel$eic,1,sum))
+    df = df[data.VarSel$keep,]
     if(!is.null(range.mz$x)){df <- df[df$x <= range.mz$x[2] & df$x >= range.mz$x[1],]}
     validate(
       need(nrow(df) >0,"No selected masses in this range, double click to reset the range")
