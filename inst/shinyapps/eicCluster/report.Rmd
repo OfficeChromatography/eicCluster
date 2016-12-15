@@ -92,7 +92,7 @@ for(i in as.numeric(input$report_choices)){
     
   ## full scan at maximum
     data = data.ls()
-    ind = seq(as.numeric(input$VarSel_mode),length(data),by=length(cond()))[index.max] ## truc refer to the TIC EIC spectrum defined before
+    ind = seq(as.numeric(input$mode),length(data),by=length(cond()))[index.max] ## truc refer to the TIC EIC spectrum defined before
     df = data.frame(x=data[[ind]]$spectrum$mass,y=data[[ind]]$spectrum$intensity)
     df <- df[order(df[,2],decreasing = T),]
     plot(df,type="h",xlim=range.mz_full(),ylab="intensity",xlab="mz",ylim=c(0,df[1,2]*1.2),main="Full scan at cluster EIC maximum")

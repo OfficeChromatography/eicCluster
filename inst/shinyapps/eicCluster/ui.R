@@ -44,6 +44,8 @@ dashboardPage(
               column(6,
                      img(src="pipeline-1.png",width="50%")
                      ),
+              downloadButton("checkpoint_download","Checkpoint_download"),
+              fileInput("checkpoint_upload","checkpoint_upload"),
               # tags$head(tags$style(type="text/css", ".btn {border-radius: 20px; font-size: 30px;}")),
               tags$head(tags$style(type="text/css", "tfoot {display: table-header-group}")),
               tags$head(tags$style(HTML(".shiny-output-error-validation {color: red;font-size: 24px}"))),
@@ -53,24 +55,24 @@ dashboardPage(
 
       ),
       tabItem(tabName = "Preparation",
-              numericInput("VarSel_treshold","Intensity treshold",1000000),
-              bsTooltip("VarSel_treshold", "This will remove all the samples with intensity lower than the selected value. Used to speed up the extraction", placement = "bottom", trigger = "hover"),
-              numericInput("VarSel_mz_mini","Masses minimum",50),
-              numericInput("VarSel_mz_maxi","Masses maximum",750),
-              numericInput("VarSel_increment","increment",0.01),
-              bsTooltip("VarSel_increment", "This will round the values to the given accuracy, we need it to bucket the signal.", placement = "bottom", trigger = "hover"),
-              uiOutput("VarSel_mode"),
-              plotOutput("VarSel_tic",dblclick = "dblclick.VarSel_tic",
-                         brush = brushOpts(id = "brush.VarSel_tic",resetOnNew = TRUE,direction = "x")),
-              bsTooltip("VarSel_tic", "You can brush and double click to select a subset of the time range and work only with it.", placement = "bottom", trigger = "hover"),
-              actionButton("VarSel_EIC","Do the bucketting"),
-              bsTooltip("VarSel_EIC", "Click to extract EIC for each masses in the selected range.", placement = "bottom", trigger = "hover"),
-              uiOutput("VarSel_EIC_dim"),
-              checkboxGroupInput("VarSel_preprocess","Preprocesses",choices=c("standardNormalVariate","scale"),selected="standardNormalVariate"),
+              numericInput("Int_treshold","Intensity treshold",1000000),
+              bsTooltip("Int_treshold", "This will remove all the samples with intensity lower than the selected value. Used to speed up the extraction", placement = "bottom", trigger = "hover"),
+              numericInput("range_mz_mini","Masses minimum",50),
+              numericInput("range_mz_maxi","Masses maximum",750),
+              numericInput("bucketing_increment","increment",0.01),
+              bsTooltip("bucketing_increment", "This will round the values to the given accuracy, we need it to bucket the signal.", placement = "bottom", trigger = "hover"),
+              uiOutput("mode"),
+              plotOutput("prep_tic",dblclick = "dblclick.prep_tic",
+                         brush = brushOpts(id = "brush.prep_tic",resetOnNew = TRUE,direction = "x")),
+              bsTooltip("prep_tic", "You can brush and double click to select a subset of the time range and work only with it.", placement = "bottom", trigger = "hover"),
+              actionButton("Bucket","Do the bucketting"),
+              bsTooltip("Bucket", "Click to extract EIC for each masses in the selected range.", placement = "bottom", trigger = "hover"),
+              uiOutput("Bucket_dim"),
+              checkboxGroupInput("preprocess","Preprocesses",choices=c("standardNormalVariate","scale"),selected="standardNormalVariate"),
               box(title = "PCA",width = 4,height = "400px",
                   h4("No options here"),
-                  actionButton("VarSel_PCA","do PCA"),
-                  bsTooltip("VarSel_PCA", "Do not click if there is more variables than masses", placement = "bottom", trigger = "hover")
+                  actionButton("PCA","do PCA"),
+                  bsTooltip("PCA", "Do not click if there is more variables than masses", placement = "bottom", trigger = "hover")
 
               ),
               box(title = "tsne",width = 4,height =  "400px",
@@ -86,7 +88,7 @@ dashboardPage(
                   checkboxInput("tsne_whiten","whiten",T),
                   bsTooltip("tsne_whiten", "A boolean value indicating whether the matrix data should be whitened.", placement = "bottom", trigger = "hover"),
 
-                  actionButton("VarSel_tsne","do tsne")
+                  actionButton("tsne","do tsne")
               ),
               box(title = "kmeans",width = 4,height =  "400px",
                   numericInput("kmeans_center","center",8),
@@ -95,17 +97,18 @@ dashboardPage(
                   numericInput("kmeans_iter_max","iter.max",10),
                   bsTooltip("kmeans_iter_max", "the maximum number of iterations allowed.", placement = "bottom", trigger = "hover"),
 
-                  actionButton("VarSel_kmeans","do kmeans")
+                  actionButton("kmeans","do kmeans")
               )
       ),
       tabItem("Visualization",
               column(12,
-                     div(style="display: inline-block;vertical-align:top; width: 150px;",actionButton("VarSel_EIC_bis","Plot the selection")),
-                     div(style="display: inline-block;vertical-align:top; width: 150px;",actionButton("VarSel_EIC_report","Select for report")),
-                     div(style="display: inline-block;vertical-align:top; width: 150px;",checkboxInput("VarSel_eic_normalize","Use same scale for eic and tic",T)),
-                     div(style="display: inline-block;vertical-align:top; width: 150px;",uiOutput("scroreplot_cross")),
-                     div(style="display: inline-block;vertical-align:top; width: 150px;",actionButton("VarSel_EIC_exclude","Exclude from plots")),
-                     div(style="display: inline-block;vertical-align:top; width: 150px;",actionButton("VarSel_EIC_exclude_reset","Reset the exclusion"))
+                     div(style="display: inline-block;vertical-align:top; width: 200px;",actionButton("VarSel_EIC_bis","Plot the selection")),
+                     div(style="display: inline-block;vertical-align:top; width: 200px;",actionButton("VarSel_EIC_report","Select for report")),
+                     div(style="display: inline-block;vertical-align:top; width: 200px;",checkboxInput("VarSel_eic_normalize","Use same scale for eic and tic",T)),
+                     div(style="display: inline-block;vertical-align:top; width: 200px;",selectInput("scoreplot_color","Color in the scoreploe",choices=c("Intensity (cps)" = "Intensity","Mass Chromatogram Quality (CODA)" = "CODA"))),
+                     div(style="display: inline-block;vertical-align:top; width: 200px;",uiOutput("scroreplot_cross")),
+                     div(style="display: inline-block;vertical-align:top; width: 200px;",actionButton("VarSel_EIC_exclude","Exclude from plots")),
+                     div(style="display: inline-block;vertical-align:top; width: 200px;",actionButton("VarSel_EIC_exclude_reset","Reset the exclusion"))
                      ),
 
               column(6,

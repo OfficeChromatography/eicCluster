@@ -32,7 +32,7 @@ server <- function(input, output,session) {
   index <- reactiveValues(index=1,cond=1,last=1) # use to explore the tic and view a mass spectrum by clicking on it
   observeEvent(input$click.VarSel_eic,{
     data = data.ls()
-    index$index = seq(as.numeric(input$VarSel_mode),length(data),by=length(cond()))[round(input$click.VarSel_eic$x)]
+    index$index = seq(as.numeric(input$mode),length(data),by=length(cond()))[round(input$click.VarSel_eic$x)]
     cond.index <- index$index %% length(cond());if(cond.index == 0){cond.index = length(cond())}
     index$cond = cond.index
     index$last = 1
@@ -41,7 +41,7 @@ server <- function(input, output,session) {
   reported <- reactiveValues(l = list()) # use to store cluster for report
   observeEvent(input$VarSel_EIC_report,{
     reported$l[[length(reported$l)+1]] = list(x=VarSel_selected$x,y=VarSel_selected$y,index=VarSel_selected$index)
-    print(str(reported$l))
+    # print(str(reported$l))
   })
 
   ## observeEvent
@@ -94,9 +94,9 @@ server <- function(input, output,session) {
   })
 
   range.time <- reactiveValues(x = NULL) # to zoom inside the TIC
-  observeEvent(input$dblclick.VarSel_tic, {
+  observeEvent(input$dblclick.prep_tic, {
     data = data.ls()
-    brush <- input$brush.VarSel_tic
+    brush <- input$brush.prep_tic
     if (!is.null(brush)) {
       range.time$x <- c(brush$xmin, brush$xmax)
       if(range.time$x[1] < 1){range.time$x[1] <-1}
@@ -106,16 +106,16 @@ server <- function(input, output,session) {
     }
   })
 
-  VarSel_ranges <- reactiveValues(x = NULL, y = NULL) # to zoom inside the scoreplot
+  range.scoreplot <- reactiveValues(x = NULL, y = NULL) # to zoom inside the scoreplot
   observeEvent(input$dblclick.VarSel_scorePlot, {
     brush <- input$brush.VarSel_scorePlot
     if (!is.null(brush)) {
-      VarSel_ranges$x <- c(brush$xmin, brush$xmax)
-      VarSel_ranges$y <- c(brush$ymin, brush$ymax)
+      range.scoreplot$x <- c(brush$xmin, brush$xmax)
+      range.scoreplot$y <- c(brush$ymin, brush$ymax)
 
     } else {
-      VarSel_ranges$x <- NULL
-      VarSel_ranges$y <- NULL
+      range.scoreplot$x <- NULL
+      range.scoreplot$y <- NULL
     }
   })
 
@@ -139,8 +139,8 @@ server <- function(input, output,session) {
   })
 
   ## uiOutput
-  output$VarSel_mode <- renderUI({
-    selectizeInput("VarSel_mode","select the condition",choices = cond(),select=2)
+  output$mode <- renderUI({
+    selectizeInput("mode","select the condition",choices = cond(),select=2)
   })
 
   ## Input
@@ -150,6 +150,8 @@ server <- function(input, output,session) {
       withProgress(message = "Reading file", value=0, {
         readMzXmlFile("www/161102_pos_neg_R521_arylamineoptitune.mzXML")
       })
+    }else if(!is.null(input$checkpoint_upload)){
+      checkpoint()$data.ls
     }else{
       validate(
         need(!is.null(input$file_MS),"Upload a mzXML file")
@@ -197,11 +199,11 @@ server <- function(input, output,session) {
 
   data.ls.VarSel <- reactive({
     data = data.ls()
-    truc <- lapply(data[seq(as.numeric(input$VarSel_mode),length(data),by=length(cond()))],
+    truc <- lapply(data[seq(as.numeric(input$mode),length(data),by=length(cond()))],
                    function(x){
-                     keep <- x$spectrum$intensity > input$VarSel_treshold
+                     keep <- x$spectrum$intensity > input$Int_treshold
                      x$spectrum$intensity <- x$spectrum$intensity[keep]
-                     x$spectrum$mass <- round(x$spectrum$mass[keep],round(-log10(input$VarSel_increment)))
+                     x$spectrum$mass <- round(x$spectrum$mass[keep],round(-log10(input$bucketing_increment)))
                      x
                    })
     truc
@@ -211,14 +213,13 @@ server <- function(input, output,session) {
     truc <- unique(unlist(lapply(data.ls.VarSel()[range.time$x[1]:range.time$x[2]],
                                  function(x){x$spectrum$mass}
     )))
-    truc <- truc[truc < input$VarSel_mz_maxi & truc > input$VarSel_mz_mini]
+    truc <- truc[truc < input$range_mz_maxi & truc > input$range_mz_mini]
     truc[order(truc)]
   })
 
-  observeEvent(input$VarSel_EIC,{
+  observeEvent(input$Bucket,{
     withProgress(message = "preparing matrix", value=0,min=0,max=length(sequence.VarSel()), {
       data.ext <- list()
-      # sequence = seq(input$VarSel_mz_mini,input$VarSel_mz_maxi,by=input$VarSel_increment)[seq(input$VarSel_mz_mini,input$VarSel_mz_maxi,by=input$VarSel_increment) %in% sequence.VarSel()]
       for(i in sequence.VarSel()){
         truc <- unlist(
           lapply(data.ls.VarSel()[range.time$x[1]:range.time$x[2]],
@@ -232,21 +233,21 @@ server <- function(input, output,session) {
     data.VarSel$keep = rep(T,nrow(data.VarSel$eic))
   })
 
-  output$VarSel_EIC_dim <- renderUI({
+  output$Bucket_dim <- renderUI({
     validate(
       need(!is.null(data.VarSel$eic),"Please do the bucketting before applying the models")
     )
     h4(paste0(dim(data.VarSel$eic)[1]," different observation (eic) and ",dim(data.VarSel$eic)[2]," time step"))
   })
 
-  observeEvent(input$VarSel_PCA,{
+  observeEvent(input$PCA,{
     validate(
       need(dim(data.VarSel$eic)[1] > dim(data.VarSel$eic)[2], "PCA not possible if more variables than observations")
     )
     withProgress(message = "PCA", value=0, {
       data <- data.VarSel$eic
-      if("standardNormalVariate" %in% input$VarSel_preprocess){data = standardNormalVariate(data)}
-      if("scale" %in% input$VarSel_preprocess){data = scale(data)}
+      if("standardNormalVariate" %in% input$preprocess){data = standardNormalVariate(data)}
+      if("scale" %in% input$preprocess){data = scale(data)}
       model = princomp(data)$scores[,1:2]
     })
     data.VarSel$model = model
@@ -254,12 +255,12 @@ server <- function(input, output,session) {
     data.VarSel$algo = "PCA"
     VarSel_selected$index <- NULL
   })
-  observeEvent(input$VarSel_tsne,{
+  observeEvent(input$tsne,{
     set.seed(1)
     withProgress(message = "tsne", value=0, {
       data <- data.VarSel$eic
-      if("standardNormalVariate" %in% input$VarSel_preprocess){data = standardNormalVariate(data)}
-      if("scale" %in% input$VarSel_preprocess){data = scale(data)}
+      if("standardNormalVariate" %in% input$preprocess){data = standardNormalVariate(data)}
+      if("scale" %in% input$preprocess){data = scale(data)}
       set.seed(1)
       model = tsne(data,max_iter = input$tsne_max_iter,perplexity = input$tsne_perplexity,whiten = input$tsne_whiten,initial_dims = input$tsne_initial_dims)[,1:2]
     })
@@ -268,11 +269,11 @@ server <- function(input, output,session) {
     data.VarSel$algo = "TSNE"
     VarSel_selected$index <- NULL
   })
-  observeEvent(input$VarSel_kmeans,{
+  observeEvent(input$kmeans,{
     withProgress(message = "kmeans", value=0, {
       data <- data.VarSel$eic
-      if("standardNormalVariate" %in% input$VarSel_preprocess){data = standardNormalVariate(data)}
-      if("scale" %in% input$VarSel_preprocess){data = scale(data)}
+      if("standardNormalVariate" %in% input$preprocess){data = standardNormalVariate(data)}
+      if("scale" %in% input$preprocess){data = scale(data)}
       set.seed(1)
       model = kmeans(data,centers=input$kmeans_center, iter.max = input$kmeans_iter_max)$cluster
       model <- cbind(model+runif(length(model),min=-0.2,max=0.2),runif(length(model),min=-0.4,max=0.4))
@@ -284,9 +285,9 @@ server <- function(input, output,session) {
   })
 
   ## plot
-  output$VarSel_tic <- renderPlot({
+  output$prep_tic <- renderPlot({
     data = data.ls()
-    ind = seq(as.numeric(input$VarSel_mode),length(data),by=length(cond()))
+    ind = seq(as.numeric(input$mode),length(data),by=length(cond()))
     x=range.time$x[1]:range.time$x[2]
     plot(x=x,y=tic()[ind][x],type="l",main=paste0("TIC ",names(cond())[as.numeric(input$select_tic_2)]),ylab="tot Ion Current",xaxt="n",xlab="time (min)")
     axis(side = 1,at=seq(x[1],x[length(x)],length.out = 10),
@@ -301,14 +302,30 @@ server <- function(input, output,session) {
     validate(
       need(!is.null(data.VarSel$model),"Please do the Clusterisation")
     )
-    Int <- apply(data.VarSel$eic[data.VarSel$keep,],1,sum)
-    rbPal <- colorRampPalette(c('blue','red'))
-    Col <- rbPal(10)[as.numeric(cut(log10(Int),breaks = 10))]
+    if(input$scoreplot_color == "Intensity"){
+      Int <- apply(data.VarSel$eic[data.VarSel$keep,],1,sum)
+      Int = log10(Int)
+      pal <- colorRampPalette(c('blue','red'))
+      order_col = findInterval(Int, sort(Int))
+      Col = pal(length(Int))[order_col]
+      # Col <- rbPal(10)[as.numeric(cut(log10(Int),breaks = 10))]
+    }else{
+      Int <- coda(data.VarSel$eic)
+      Int[is.nan(Int)] = 0
+      # print(Int)
+      pal <- colorRampPalette(c('blue','red'))
+      order_col = findInterval(Int, sort(Int))
+      Col = pal(length(Int))[order_col]
+      # rbPal <- colorRampPalette(c('blue','red'))
+      # Col <- rbPal(10)[as.numeric(cut(Int,breaks = 10))]
+    }
 
-    if(is.null(VarSel_ranges$x)){
+
+
+    if(is.null(range.scoreplot$x)){
       plot(data.VarSel$model,type="n",xlab="",ylab="")
     }else{
-      plot(data.VarSel$model,type="n",xlim = VarSel_ranges$x, ylim = VarSel_ranges$y,xlab="",ylab="")
+      plot(data.VarSel$model,type="n",xlim = range.scoreplot$x, ylim = range.scoreplot$y,xlab="",ylab="")
     }
     text(data.VarSel$model[data.VarSel$keep,],labels=rownames(data.VarSel$eic)[data.VarSel$keep],col=Col)
     title(main=data.VarSel$algo,xlab = "dimension 1",ylab="dimension 2")
@@ -361,7 +378,7 @@ server <- function(input, output,session) {
 
     if(range.mz$x != range.mz_full()){
       par(new=T)
-      ind = seq(as.numeric(input$VarSel_mode),length(data.ls()),by=length(cond()))
+      ind = seq(as.numeric(input$mode),length(data.ls()),by=length(cond()))
       truc = unlist(lapply(data.ls(),function(x){sum(x$spectrum$intensity[x$spectrum$mass < range.mz$x[2]& x$spectrum$mass > range.mz$x[1]])}))[ind][x]
       if(input$VarSel_eic_normalize){
         plot(x=x,y=truc,type="l",col="darkgreen",ylim=c(0,max(apply(data.VarSel$eic,2,sum))),xaxt="n",yaxt="n",ylab="",xlab="")
@@ -491,4 +508,32 @@ server <- function(input, output,session) {
       file.rename(out, file)
     }
   )
+
+  output$checkpoint_download = downloadHandler(
+    filename = function(x){"eic2_checkpoint.RData"},
+    content = function(con) {
+      assign("data",list(index = index$index,cond=index$index,last=index$index,reported=reported$l,
+                         range.mz.x = range.mz$x,range.time.x = range.time$x,range.scoreplot.x=range.scoreplot$x,range.scoreplot.y=range.scoreplot$y,
+                         data.VarSel.eic = data.VarSel$eic, data.VarSel.model = data.VarSel$model, data.VarSel.algo = data.VarSel$algo, data.VarSel.keep = data.VarSel$keep,
+                         VarSel_selected.index = VarSel_selected$index, VarSel_selected.x = VarSel_selected$x, VarSel_selected.y = VarSel_selected$y,
+                         data.ls = data.ls()
+      ))
+      save(list="data", file=con)
+    }
+  )
+
+  checkpoint = reactive({
+    load(input$checkpoint_upload$datapath)
+    data
+  })
+
+  observeEvent(input$checkpoint_upload,{
+    data = checkpoint()
+    data$index -> index$index;data$cond->index$index;data$last->index$index;data$reported->reported$l;
+    data$range.mz.x -> range.mz$x; data$range.time.x -> range.time$x; data$range.scoreplot.x->range.scoreplot$x; data$range.scoreplot.y->range.scoreplot$y;
+    data$data.VarSel.eic -> data.VarSel$eic; data$data.VarSel.model -> data.VarSel$model; data$data.VarSel.algo -> data.VarSel$algo; data$data.VarSel.keep -> data.VarSel$keep;
+    data$VarSel_selected.index -> VarSel_selected$index; data$VarSel_selected.x -> VarSel_selected$x; data$VarSel_selected.y -> VarSel_selected$y
+
+  })
+
 }
