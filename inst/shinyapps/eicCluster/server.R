@@ -37,14 +37,27 @@ server <- function(input, output,session) {
     index$cond = cond.index
     index$last = 1
   })
+  observeEvent(input$click.prep_tic,{
+    data = data.ls()
+    index$index = seq(as.numeric(input$mode),length(data),by=length(cond()))[round(input$click.prep_tic$x)]
+    cond.index <- index$index %% length(cond());if(cond.index == 0){cond.index = length(cond())}
+    index$cond = cond.index
+    index$last = 1
+  })
 
   reported <- reactiveValues(l = list()) # use to store cluster for report
   observeEvent(input$VarSel_EIC_report,{
-    reported$l[[length(reported$l)+1]] = list(x=VarSel_selected$x,y=VarSel_selected$y,index=VarSel_selected$index)
-    # print(str(reported$l))
+    truc = list(x=VarSel_selected$x,y=VarSel_selected$y,index=VarSel_selected$index)
+    if(length(reported$l) == 0){
+      reported$l[[length(reported$l)+1]] = truc ## if first time, append truc
+    }else if(reported$l[[length(reported$l)]]$x[1] == truc$x[1] & reported$l[[length(reported$l)]]$x[2] == truc$x[2]){
+      reported$l = list() ## else if last == truc, reset
+    }else{
+      reported$l[[length(reported$l)+1]] = truc ## else, append
+    }
   })
 
-  ## observeEvent
+  ## observeEvent Interactive
   range.mz <- reactiveValues(x = NULL) # to zoom inside the mass spectrum, react to a few interaction but easy
   range.mz_full = reactive({
     c(min(unlist(lapply(data.ls(),function(x){x$metaData$lowMz}))),
@@ -55,6 +68,16 @@ server <- function(input, output,session) {
     range.mz$x <- c(min(unlist(lapply(data.ls(),function(x){x$metaData$lowMz}))),
                     max(unlist(lapply(data.ls(),function(x){x$metaData$highMz})))
     )
+  })
+  observeEvent(input$dblclick.prep_fullscan, {
+    brush <- input$brush.prep_fullscan
+    if (!is.null(brush)) {
+      range.mz$x <- c(brush$xmin, brush$xmax)
+    } else {
+      range.mz$x <- c(min(unlist(lapply(data.ls(),function(x){x$metaData$lowMz}))),
+                      max(unlist(lapply(data.ls(),function(x){x$metaData$highMz})))
+      )
+    }
   })
   observeEvent(input$dblclick.VarSel_spectrum, {
     brush <- input$brush.VarSel_spectrum
@@ -87,7 +110,7 @@ server <- function(input, output,session) {
     }
   })
 
-  data.VarSel <- reactiveValues(eic=NULL,model=NULL,algo=NULL,keep=NULL) # triggered by the cluster buttonS. this one contain a lot of info so the observeEvent are separated
+  data.VarSel <- reactiveValues(eic_before_CODA = NULL,eic=NULL,model=NULL,algo=NULL,keep=NULL,range.time=NULL)
   observeEvent(data.ls(),{
     range.time$x[1] = 1
     range.time$x[2] = length(data.ls())/length(cond())
@@ -97,6 +120,17 @@ server <- function(input, output,session) {
   observeEvent(input$dblclick.prep_tic, {
     data = data.ls()
     brush <- input$brush.prep_tic
+    if (!is.null(brush)) {
+      range.time$x <- c(brush$xmin, brush$xmax)
+      if(range.time$x[1] < 1){range.time$x[1] <-1}
+      if(range.time$x[2] > data[[1]]$metaData$scanCount/length(cond())){range.time$x[2] <- data[[1]]$metaData$scanCount/length(cond())}
+    } else {
+      range.time$x <-c(1,data[[1]]$metaData$scanCount/length(cond()))
+    }
+  })
+  observeEvent(input$dblclick.VarSel_eic, {
+    data = data.ls()
+    brush <- input$brush.VarSel_eic
     if (!is.null(brush)) {
       range.time$x <- c(brush$xmin, brush$xmax)
       if(range.time$x[1] < 1){range.time$x[1] <-1}
@@ -124,7 +158,7 @@ server <- function(input, output,session) {
     brush <- input$brush.VarSel_scorePlot
     if (!is.null(brush)) {
       score <-  data.VarSel$model
-      truc <- which((score[,1] > brush$xmin & score[,1] < brush$xmax & score[,2] > brush$ymin & score[,2] < brush$ymax))
+      truc <- which((score[,1] > brush$xmin & score[,1] < brush$xmax & score[,2] > brush$ymin & score[,2] < brush$ymax & data.VarSel$keep))
       VarSel_selected$index <- truc
 
       VarSel_selected$x <- c(brush$xmin, brush$xmax)
@@ -133,10 +167,16 @@ server <- function(input, output,session) {
   })
   observeEvent(input$VarSel_EIC_exclude, {
     data.VarSel$keep[VarSel_selected$index] = F
+    reported$l = list()
   })
   observeEvent(input$VarSel_EIC_exclude_reset, {
     data.VarSel$keep = rep(T,nrow(data.VarSel$eic))
+    reported$l = list()
   })
+
+  ## Observe Event data
+
+
 
   ## uiOutput
   output$mode <- renderUI({
@@ -146,23 +186,21 @@ server <- function(input, output,session) {
   ## Input
 
   data.ls <- reactive({
-    if(input$file_demo){
-      withProgress(message = "Reading file", value=0, {
-        readMzXmlFile("www/161102_pos_neg_R521_arylamineoptitune.mzXML")
-      })
-    }else if(!is.null(input$checkpoint_upload)){
+    if(input$Data_2_use == "Check_point_file"){
       checkpoint()$data.ls
-    }else{
+    }else if(input$Data_2_use == "Your_own_data"){
       validate(
         need(!is.null(input$file_MS),"Upload a mzXML file")
       )
       withProgress(message = "Reading file", value=0, {
         readMzXmlFile(input$file_MS$datapath)
       })
+    }else if(input$Data_2_use == "Demo_file"){
+      checkpoint()$data.ls
     }
 
-  })
 
+  })
   cond <- reactive({
     data = data.ls()
     ls <- list()
@@ -185,44 +223,37 @@ server <- function(input, output,session) {
     names(truc) <- ls
     truc
   })
-
   output$meta <- renderPrint({
     data = data.ls()
     str(data[index$index])
   })
-
 
   ## reactive
   tic <- reactive({
     unlist(lapply(data.ls(),function(x){x$metaData$totIonCurrent}))
   })
 
-  data.ls.VarSel <- reactive({
-    data = data.ls()
-    truc <- lapply(data[seq(as.numeric(input$mode),length(data),by=length(cond()))],
-                   function(x){
-                     keep <- x$spectrum$intensity > input$Int_treshold
-                     x$spectrum$intensity <- x$spectrum$intensity[keep]
-                     x$spectrum$mass <- round(x$spectrum$mass[keep],round(-log10(input$bucketing_increment)))
-                     x
-                   })
-    truc
-  })
-
-  sequence.VarSel <- reactive({
-    truc <- unique(unlist(lapply(data.ls.VarSel()[range.time$x[1]:range.time$x[2]],
-                                 function(x){x$spectrum$mass}
-    )))
-    truc <- truc[truc < input$range_mz_maxi & truc > input$range_mz_mini]
-    truc[order(truc)]
-  })
-
   observeEvent(input$Bucket,{
-    withProgress(message = "preparing matrix", value=0,min=0,max=length(sequence.VarSel()), {
+    data = data.ls()
+    data.ls.VarSel <- lapply(data[seq(as.numeric(input$mode),length(data),by=length(cond()))],
+                             function(x){
+                               keep <- x$spectrum$intensity > input$Int_treshold
+                               x$spectrum$intensity <- x$spectrum$intensity[keep] ## apply the trshold
+                               x$spectrum$mass <- round(x$spectrum$mass[keep],round(-log10(input$bucketing_increment))) ## apply the rounding
+                               x
+                             })
+
+    sequence.VarSel <- unique(unlist(lapply(data.ls.VarSel[range.time$x[1]:range.time$x[2]],
+                                            function(x){x$spectrum$mass}
+    )))
+    sequence.VarSel <- sequence.VarSel[sequence.VarSel < input$range_mz_maxi & sequence.VarSel > input$range_mz_mini]
+    sequence.VarSel = sequence.VarSel[order(sequence.VarSel)]
+
+    withProgress(message = "preparing matrix", value=0,min=0,max=length(sequence.VarSel), {
       data.ext <- list()
-      for(i in sequence.VarSel()){
+      for(i in sequence.VarSel){
         truc <- unlist(
-          lapply(data.ls.VarSel()[range.time$x[1]:range.time$x[2]],
+          lapply(data.ls.VarSel[range.time$x[1]:range.time$x[2]],
                  function(x){sum(x$spectrum$intensity[x$spectrum$mass == i])}))
         data.ext[[as.character(i)]] <- truc
         # print(i)
@@ -230,16 +261,43 @@ server <- function(input, output,session) {
       }
     })
     data.VarSel$eic = do.call(rbind,data.ext)
+    data.VarSel$eic_before_CODA = data.VarSel$eic
+    data.VarSel$algo = "None"
+    data.VarSel$model = NULL
     data.VarSel$keep = rep(T,nrow(data.VarSel$eic))
-  })
+    data.VarSel$range.time = range.time$x
+    meta$Int_treshold=input$Int_treshold;meta$range_mz_mini=input$range_mz_mini;meta$range_mz_maxi=input$range_mz_maxi;meta$bucketing_increment=input$bucketing_increment;meta$mode=input$mode
+    meta$window_CODA = input$window_CODA;meta$smoothing_CODA=input$smoothing_CODA;meta$threshold_CODA=input$threshold_CODA;meta$apply_CODA=F
 
-  output$Bucket_dim <- renderUI({
+  })
+  observeEvent(input$apply_CODA,{
+    validate(need(input$window_CODA %% 2 != 0,"Window smoothing for CODA must be odd."))
+    data.VarSel$eic = data.VarSel$eic_before_CODA
+    truc = coda(data.VarSel$eic_before_CODA,window = input$window_CODA,smoothing = input$smoothing_CODA)
+    data.VarSel$eic = data.VarSel$eic[!is.na(truc),] ## will remove the na produce by CODA
+    truc = truc[!is.na(truc)]
+    data.VarSel$eic = data.VarSel$eic[truc > input$threshold_CODA,]# will keep only eic with values above the threshold
+    data.VarSel$keep = rep(T,nrow(data.VarSel$eic))
+    meta$window_CODA = input$window_CODA;meta$smoothing_CODA=input$smoothing_CODA;meta$threshold_CODA=input$threshold_CODA;meta$apply_CODA=T
+    data.VarSel$model = NULL
+  })
+  output$Bucket_dim_1 <- renderUI({
     validate(
       need(!is.null(data.VarSel$eic),"Please do the bucketting before applying the models")
     )
-    h4(paste0(dim(data.VarSel$eic)[1]," different observation (eic) and ",dim(data.VarSel$eic)[2]," time step"))
+    h4(paste0(dim(data.VarSel$eic_before_CODA)[1]," different observation (eic) and ",dim(data.VarSel$eic_before_CODA)[2]," time step"))
   })
+  output$Bucket_dim_2 <- renderUI({
+    validate(
+      need(!is.null(data.VarSel$eic),"Please do the bucketting before applying the models")
+    )
+    validate(need(input$window_CODA %% 2 != 0,"Window smoothing for CODA must be odd."))
+    tagList(
+      h4(paste0(dim(data.VarSel$eic)[1]," different observation (eic) and ",dim(data.VarSel$eic)[2]," time step")),
+      h4(if(meta$apply_CODA){"CODA applied"}else("CODA not applied"))
+    )
 
+  })
   observeEvent(input$PCA,{
     validate(
       need(dim(data.VarSel$eic)[1] > dim(data.VarSel$eic)[2], "PCA not possible if more variables than observations")
@@ -254,20 +312,10 @@ server <- function(input, output,session) {
     rownames(data.VarSel$model) = rownames(data.VarSel$eic)
     data.VarSel$algo = "PCA"
     VarSel_selected$index <- NULL
-  })
-  observeEvent(input$tsne,{
-    set.seed(1)
-    withProgress(message = "tsne", value=0, {
-      data <- data.VarSel$eic
-      if("standardNormalVariate" %in% input$preprocess){data = standardNormalVariate(data)}
-      if("scale" %in% input$preprocess){data = scale(data)}
-      set.seed(1)
-      model = tsne(data,max_iter = input$tsne_max_iter,perplexity = input$tsne_perplexity,whiten = input$tsne_whiten,initial_dims = input$tsne_initial_dims)[,1:2]
-    })
-    data.VarSel$model = model
-    rownames(data.VarSel$model) = rownames(data.VarSel$eic)
-    data.VarSel$algo = "TSNE"
-    VarSel_selected$index <- NULL
+    meta$preprocess = input$preprocess
+    meta$tsne_initial_dims=input$tsne_initial_dims ;meta$tsne_perplexity=input$tsne_perplexity ;meta$tsne_max_iter=input$tsne_max_iter ;meta$tsne_whiten=input$tsne_whiten ;
+    meta$tsne_pca=input$tsne_pca ;meta$tsne_theta=input$tsne_theta
+    meta$kmeans_center=input$kmeans_center ;meta$kmeans_iter_max=input$kmeans_iter_max
   })
   observeEvent(input$kmeans,{
     withProgress(message = "kmeans", value=0, {
@@ -282,6 +330,54 @@ server <- function(input, output,session) {
     rownames(data.VarSel$model) = rownames(data.VarSel$eic)
     data.VarSel$algo = "k-means"
     VarSel_selected$index <- NULL
+    meta$preprocess = input$preprocess
+    meta$tsne_initial_dims=input$tsne_initial_dims ;meta$tsne_perplexity=input$tsne_perplexity ;meta$tsne_max_iter=input$tsne_max_iter ;meta$tsne_whiten=input$tsne_whiten ;
+    meta$tsne_pca=input$tsne_pca ;meta$tsne_theta=input$tsne_theta
+    meta$kmeans_center=input$kmeans_center ;meta$kmeans_iter_max=input$kmeans_iter_max
+  })
+  observeEvent(input$tsne,{
+    set.seed(1)
+    withProgress(message = "tsne", value=0, {
+      data <- data.VarSel$eic
+      if("standardNormalVariate" %in% input$preprocess){data = standardNormalVariate(data)}
+      if("scale" %in% input$preprocess){data = scale(data)}
+      set.seed(1)
+      if(data.VarSel$algo == "TSNE"){initial_config = data.VarSel$model}else{initial_config = NULL}
+      model = tsne(data,max_iter = input$tsne_max_iter,perplexity = input$tsne_perplexity,whiten = input$tsne_whiten,initial_dims = input$tsne_initial_dims,initial_config = initial_config)[,1:2]
+    })
+    data.VarSel$model = model
+    rownames(data.VarSel$model) = rownames(data.VarSel$eic)
+    data.VarSel$algo = "TSNE"
+    VarSel_selected$index <- NULL
+    meta$preprocess = input$preprocess
+    meta$tsne_initial_dims=input$tsne_initial_dims ;meta$tsne_perplexity=input$tsne_perplexity ;meta$tsne_max_iter=input$tsne_max_iter ;meta$tsne_whiten=input$tsne_whiten ;
+    meta$tsne_pca=input$tsne_pca ;meta$tsne_theta=input$tsne_theta
+    meta$kmeans_center=input$kmeans_center ;meta$kmeans_iter_max=input$kmeans_iter_max
+  })
+  observeEvent(input$rtsne,{
+    set.seed(1)
+    withProgress(message = "rtsne", value=0, {
+      data <- data.VarSel$eic
+      if("standardNormalVariate" %in% input$preprocess){data = standardNormalVariate(data)}
+      if("scale" %in% input$preprocess){data = scale(data)}
+      set.seed(1)
+      if(data.VarSel$algo == "rTSNE"){Y_init = data.VarSel$model}else{Y_init = NULL}
+      model = Rtsne::Rtsne(data,dims=2,max_iter = input$tsne_max_iter,perplexity = input$tsne_perplexity,pca = input$tsne_pca,initial_dims = input$tsne_initial_dims,Y_init = Y_init,verbose=T,theta=input$tsne_theta,check_duplicates = F)
+      print(str(model)) ## to be removed, just to know what's inside
+      model = model$Y
+    })
+    data.VarSel$model = model
+    rownames(data.VarSel$model) = rownames(data.VarSel$eic)
+    data.VarSel$algo = "rTSNE"
+    VarSel_selected$index <- NULL
+    meta$preprocess = input$preprocess
+    meta$tsne_initial_dims=input$tsne_initial_dims ;meta$tsne_perplexity=input$tsne_perplexity ;meta$tsne_max_iter=input$tsne_max_iter ;meta$tsne_whiten=input$tsne_whiten ;
+    meta$tsne_pca=input$tsne_pca ;meta$tsne_theta=input$tsne_theta
+    meta$kmeans_center=input$kmeans_center ;meta$kmeans_iter_max=input$kmeans_iter_max
+  })
+  observeEvent(input$reset_tsne,{
+    data.VarSel$algo = "None"
+    meta$tsne_max_iter =NULL
   })
 
   ## plot
@@ -293,11 +389,27 @@ server <- function(input, output,session) {
     axis(side = 1,at=seq(x[1],x[length(x)],length.out = 10),
          labels = round(seq(getTime(data,x[1]*length(cond())),getTime(data,x[length(x)]*length(cond())),length.out = 10),2))
   })
-
+  output$prep_fullscan <- renderPlot({
+    data = data.ls()
+    df = data.frame(x=data[[index$index]]$spectrum$mass,y=data[[index$index]]$spectrum$intensity)
+    if(!is.null(range.mz$x)){df <- df[df$x <= range.mz$x[2] & df$x >= range.mz$x[1],]}
+    df <- df[order(df[,2],decreasing = T),]
+    par(yaxs="i", xaxs="i",mar=c(5, 4, 3, 2))
+    validate(
+      need(nrow(df) >0,"No selected masses in this range, double click to reset the range")
+    )
+    par(yaxs="i", xaxs="i")
+    plot(df,type = "h",
+         xlab="m/z",ylab="intensity",xlim=range.mz$x, ylim=c(0,df[1,2]*1.1),
+         main=paste0(names(cond())[index$cond],"\nRf = ",getTime(data,index$index)," min ; base peak Mz = ",round(df[1,1],4),
+                     " ; base peak intensity = ",df[1,2],"\n",
+                     "peaks count = ",nrow(df)," ; totIonCurrent = ",round(sum(df[,2])))
+    )
+    text(x=df[1:10,1],y=df[1:10,2],labels=round(df[1:10,1],4),pos=3)
+  })
   output$scroreplot_cross = renderUI({
     selectizeInput("scroreplot_cross","select the masses to highlight",choices = rownames(data.VarSel$eic),selected = NULL,multiple = T)
   })
-
   output$VarSel_scorePlot <- renderPlot({
     validate(
       need(!is.null(data.VarSel$model),"Please do the Clusterisation")
@@ -310,7 +422,7 @@ server <- function(input, output,session) {
       Col = pal(length(Int))[order_col]
       # Col <- rbPal(10)[as.numeric(cut(log10(Int),breaks = 10))]
     }else{
-      Int <- coda(data.VarSel$eic)
+      Int <- coda(data.VarSel$eic,window = input$window_CODA,smoothing = input$smoothing_CODA)
       Int[is.nan(Int)] = 0
       # print(Int)
       pal <- colorRampPalette(c('blue','red'))
@@ -320,14 +432,21 @@ server <- function(input, output,session) {
       # Col <- rbPal(10)[as.numeric(cut(Int,breaks = 10))]
     }
 
-
-
     if(is.null(range.scoreplot$x)){
-      plot(data.VarSel$model,type="n",xlab="",ylab="")
+      xlim = c(min(data.VarSel$model[data.VarSel$keep,1]),max(data.VarSel$model[data.VarSel$keep,1]))
+      ylim = c(min(data.VarSel$model[data.VarSel$keep,2]),max(data.VarSel$model[data.VarSel$keep,2]))
     }else{
-      plot(data.VarSel$model,type="n",xlim = range.scoreplot$x, ylim = range.scoreplot$y,xlab="",ylab="")
+      xlim = range.scoreplot$x; ylim = range.scoreplot$y
     }
-    text(data.VarSel$model[data.VarSel$keep,],labels=rownames(data.VarSel$eic)[data.VarSel$keep],col=Col)
+    if(input$VarSel_eic_pch == "m/z"){
+      plot(data.VarSel$model[data.VarSel$keep,],type="n",xlim = xlim, ylim = ylim,xlab="",ylab="")
+      text(data.VarSel$model[data.VarSel$keep,],labels=rownames(data.VarSel$eic)[data.VarSel$keep],col=Col)
+    }else if(input$VarSel_eic_pch == "punct"){
+      plot(data.VarSel$model[data.VarSel$keep,],type="n",xlim = xlim, ylim = ylim,xlab="",ylab="")
+      text(data.VarSel$model[data.VarSel$keep,],labels=".",col=Col)
+    }else if(input$VarSel_eic_pch == "circles"){
+      plot(data.VarSel$model[data.VarSel$keep,],xlim = xlim, ylim = ylim,xlab="",ylab="",col=Col)
+    }
     title(main=data.VarSel$algo,xlab = "dimension 1",ylab="dimension 2")
     ## add the scoreplot_cross if applicable
     if(!is.null(input$scroreplot_cross)){
@@ -345,7 +464,6 @@ server <- function(input, output,session) {
               add=T,inches = F,fg="darkgreen",lwd=2)
     }
   })
-
   output$VarSel_eic <- renderPlot({
     leg = c("tic")
     col = c("black")
@@ -353,12 +471,14 @@ server <- function(input, output,session) {
       need(!is.null(data.VarSel$model),"Please do the Clusterisation")
     )
     data = data.ls()
-    x=range.time$x[1]:range.time$x[2]
-    par(mar=c(5, 4, 3, 5))
-    plot(x=x,y=apply(data.VarSel$eic[data.VarSel$keep,],2,sum),type="l",xlab="time (min)",ylab="Intensity",xaxt="n")
+    x=data.VarSel$range.time[1]:data.VarSel$range.time[2]
+    # x2 = range.time$x[1]:range.time$x[2]
+    tic.len = 10#round(10*length(x2)/length(x))
+    par(mar=c(5, 4, 3, 5),mgp=c(2,0.5,0))
+    plot(x=x,y=apply(data.VarSel$eic[data.VarSel$keep,],2,sum),type="l",xlab="time (min)",ylab="Intensity",xaxt="n",xlim=range.time$x)
 
-    axis(side = 1,at=seq(range.time$x[1],range.time$x[2],length.out = 10),
-         labels = round(seq(getTime(data,x[1]*length(cond())),getTime(data,x[length(x)]*length(cond())),length.out = 10),2))
+    axis(side = 1,at=seq(data.VarSel$range.time[1],data.VarSel$range.time[2],length.out = tic.len),
+         labels = round(seq(getTime(data,x[1]*length(cond())),getTime(data,x[length(x)]*length(cond())),length.out = tic.len),2))
     if(!is.null(VarSel_selected$index)){
       par(new=T)
       if(length(VarSel_selected$index)>1){
@@ -367,24 +487,24 @@ server <- function(input, output,session) {
         truc <- data.VarSel$eic[VarSel_selected$index,]
       }
       if(input$VarSel_eic_normalize){
-        plot(x=x,y=truc,type="l",col="red",ylim=c(0,max(apply(data.VarSel$eic,2,sum))),xaxt="n",yaxt="n",ylab="",xlab="")
+        plot(x=x,y=truc,type="l",col="red",ylim=c(0,max(apply(data.VarSel$eic,2,sum))),xaxt="n",yaxt="n",ylab="",xlab="",xlim=range.time$x)
       }else{
-        plot(x=x,y=truc,type="l",col="red",xaxt="n",yaxt="n",ylab="",xlab="")
-        axis(side = 4,at = seq(0,max(truc),length.out = 10),col="red")
+        plot(x=x,y=truc,type="l",col="red",xaxt="n",yaxt="n",ylab="",xlab="",xlim=range.time$x)
+        axis(side = 4,col="red",col.axis="red")
       }
       leg = c(leg,"eicCluster")
       col = c(col,"red")
     }
 
-    if(range.mz$x != range.mz_full()){
+    if(sum(range.mz$x) != sum(range.mz_full())){
       par(new=T)
       ind = seq(as.numeric(input$mode),length(data.ls()),by=length(cond()))
       truc = unlist(lapply(data.ls(),function(x){sum(x$spectrum$intensity[x$spectrum$mass < range.mz$x[2]& x$spectrum$mass > range.mz$x[1]])}))[ind][x]
       if(input$VarSel_eic_normalize){
-        plot(x=x,y=truc,type="l",col="darkgreen",ylim=c(0,max(apply(data.VarSel$eic,2,sum))),xaxt="n",yaxt="n",ylab="",xlab="")
+        plot(x=x,y=truc,type="l",col="darkgreen",ylim=c(0,max(apply(data.VarSel$eic,2,sum))),xaxt="n",yaxt="n",ylab="",xlab="",xlim=range.time$x)
       }else{
-        plot(x=x,y=truc,type="l",col="darkgreen",xaxt="n",yaxt="n",ylab="",xlab="")
-        axis(side = 4,at = seq(0,max(truc),length.out = 10),line=2,col="darkgreen")
+        plot(x=x,y=truc,type="l",col="darkgreen",xaxt="n",yaxt="n",ylab="",xlab="",xlim=range.time$x)
+        axis(side = 4,line=2,col="darkgreen",col.axis="darkgreen")
       }
       leg = c(leg,"eicClassique")
       col = c(col,"darkgreen")
@@ -393,7 +513,6 @@ server <- function(input, output,session) {
 
     legend("topright",legend = leg,lty=1,col=col)
   })
-
   output$VarSel_spectrum <- renderPlot({
     par(yaxs="i", xaxs="i",mar=c(5, 4, 3, 2))
     validate(
@@ -410,7 +529,6 @@ server <- function(input, output,session) {
       text(x=df[1:10,1],y=df[1:10,2],labels=df[1:10,1],pos=3)
     }
   })
-
   output$VarSel_fullfullscan <- renderPlot({ ## the fullfullscan means the full scan over the whole time range
     par(yaxs="i", xaxs="i",mar=c(5, 4, 3, 2))
     validate(
@@ -426,7 +544,6 @@ server <- function(input, output,session) {
     plot(df,type="h",xlim=range.mz$x,ylab="intensity",xlab="mz",ylim=c(0,df[1,2]*1.1),main="full scan")
     text(x=df[1:10,1],y=df[1:10,2],labels=df[1:10,1],pos=3)
   })
-
   spectrum_df <- reactive({
     data = data.ls()
     df = data.frame(x=data[[index$index]]$spectrum$mass,y=data[[index$index]]$spectrum$intensity)
@@ -434,7 +551,6 @@ server <- function(input, output,session) {
     df <- df[order(df[,2],decreasing = T),]
     df
   })
-
   output$VarSel_fullscan <- renderPlot({
     par(yaxs="i", xaxs="i",mar=c(5, 4, 3, 2))
     data = data.ls()
@@ -451,7 +567,6 @@ server <- function(input, output,session) {
     )
     text(x=df[1:10,1],y=df[1:10,2],labels=round(df[1:10,1],4),pos=3)
   })
-
   output$report_choices = renderUI({
     validate(need(length(reported$l) > 0 , "select at least a cluster"))
     choices = seq(length(reported$l))
@@ -514,26 +629,88 @@ server <- function(input, output,session) {
     content = function(con) {
       assign("data",list(index = index$index,cond=index$index,last=index$index,reported=reported$l,
                          range.mz.x = range.mz$x,range.time.x = range.time$x,range.scoreplot.x=range.scoreplot$x,range.scoreplot.y=range.scoreplot$y,
-                         data.VarSel.eic = data.VarSel$eic, data.VarSel.model = data.VarSel$model, data.VarSel.algo = data.VarSel$algo, data.VarSel.keep = data.VarSel$keep,
+                         data.VarSel.eic_before_CODA = data.VarSel$eic_before_CODA,data.VarSel.eic = data.VarSel$eic, data.VarSel.model = data.VarSel$model, data.VarSel.algo = data.VarSel$algo, data.VarSel.keep = data.VarSel$keep,data.VarSel.range.time = data.VarSel$range.time,
                          VarSel_selected.index = VarSel_selected$index, VarSel_selected.x = VarSel_selected$x, VarSel_selected.y = VarSel_selected$y,
-                         data.ls = data.ls()
+                         data.ls = data.ls(),
+                         meta.Int_treshold=meta$Int_treshold,meta.range_mz_mini=meta$range_mz_mini,meta.range_mz_maxi=meta$range_mz_maxi,meta.bucketing_increment=meta$bucketing_increment,meta.mode=meta$mode,
+                         meta.window_CODA=meta$window_CODA,meta.smoothing_CODA=meta$smoothing_CODA,meta.threshold_CODA=meta$threshold_CODA,meta.apply_CODA=meta$apply_CODA,
+                         meta.preprocess=meta$preprocess,
+                         meta.tsne_pca=meta$tsne_pca,meta.tsne_theta=meta$tsne_theta,
+                         meta.tsne_initial_dims=meta$tsne_initial_dims,meta.tsne_perplexity=meta$tsne_perplexity,meta.tsne_max_iter=meta$tsne_max_iter,meta.tsne_whiten=meta$tsne_whiten,meta.kmeans_center=meta$kmeans_center,meta.kmeans_iter_max=meta$kmeans_iter_max
       ))
       save(list="data", file=con)
     }
   )
 
   checkpoint = reactive({
-    load(input$checkpoint_upload$datapath)
+    if(input$Data_2_use == "Check_point_file"){
+      validate(need(!is.null(input$checkpoint_upload),"Upload a checkpoint file"))
+      load(input$checkpoint_upload$datapath)
+    }else if(input$Data_2_use == "Demo_file"){
+      validate(need(!is.null(input$Demo_file),"Select a demo file"))
+      load(paste0("www/",input$Demo_file))
+    }
     data
   })
 
-  observeEvent(input$checkpoint_upload,{
-    data = checkpoint()
-    data$index -> index$index;data$cond->index$index;data$last->index$index;data$reported->reported$l;
-    data$range.mz.x -> range.mz$x; data$range.time.x -> range.time$x; data$range.scoreplot.x->range.scoreplot$x; data$range.scoreplot.y->range.scoreplot$y;
-    data$data.VarSel.eic -> data.VarSel$eic; data$data.VarSel.model -> data.VarSel$model; data$data.VarSel.algo -> data.VarSel$algo; data$data.VarSel.keep -> data.VarSel$keep;
-    data$VarSel_selected.index -> VarSel_selected$index; data$VarSel_selected.x -> VarSel_selected$x; data$VarSel_selected.y -> VarSel_selected$y
+  ## meta: must be change in 4 places: here, in the download, in the observe with all the updates, in the observeEvent(s)
+  meta = reactiveValues(Int_treshold=NULL,range_mz_mini=NULL,range_mz_maxi=NULL,bucketing_increment=NULL,mode=NULL,
+                        window_CODA = NULL,smoothing_CODA=NULL,threshold_CODA=NULL,apply_CODA=F,
+                        preprocess = NULL,
+                        tsne_initial_dims=NULL,tsne_perplexity=NULL,tsne_max_iter=NULL,tsne_whiten=NULL,tsne_pca=NULL,tsne_theta=NULL,kmeans_center=NULL,kmeans_iter_max=NULL)
 
+  observe({
+    if(input$Data_2_use == "Your_own_data"){ ## do we need to reboot everybody ??
+
+      index$index=1;index$cond=1;index$last=1
+      reported$l = list()
+      range.mz$x = NULL
+      data.VarSel$eic_before_CODA=NULL;data.VarSel$eic=NULL;data.VarSel$model=NULL;data.VarSel$algo=NULL;data.VarSel$keep=NULL
+      range.time$x = NULL # to zoom inside the TIC
+      range.scoreplot$x = NULL; range.scoreplot$y = NULL # to zoom inside the scoreplot
+      VarSel_selected$index=c();VarSel_selected$x = NULL;VarSel_selected$y = NULL # triggered when cluster selected
+    }else{
+      data = checkpoint()
+      data$index -> index$index;data$cond->index$index;data$last->index$index;data$reported->reported$l;
+      data$range.mz.x -> range.mz$x; data$range.time.x -> range.time$x; data$range.scoreplot.x->range.scoreplot$x; data$range.scoreplot.y->range.scoreplot$y;
+      data$data.VarSel.eic_before_CODA -> data.VarSel$eic_before_CODA;data$data.VarSel.eic -> data.VarSel$eic; data$data.VarSel.model -> data.VarSel$model;
+      data$data.VarSel.algo -> data.VarSel$algo; data$data.VarSel.keep -> data.VarSel$keep;data$data.VarSel.range.time -> data.VarSel$range.time;
+      data$VarSel_selected.index -> VarSel_selected$index; data$VarSel_selected.x -> VarSel_selected$x; data$VarSel_selected.y -> VarSel_selected$y
+      updateNumericInput(session,"Int_treshold",value = data$meta.Int_treshold)
+      updateNumericInput(session,"range_mz_mini",value = data$meta.range_mz_mini)
+      updateNumericInput(session,"range_mz_maxi",value = data$meta.range_mz_maxi)
+      updateNumericInput(session,"bucketing_increment",value = data$meta.bucketing_increment)
+      updateSelectizeInput(session,"mode",selected=data$meta.mode)
+      updateNumericInput(session,"window_CODA",value = data$meta.window_CODA)
+      updateNumericInput(session,"smoothing_CODA",value = data$meta.smoothing_CODA)
+      updateNumericInput(session,"threshold_CODA",value = data$meta.threshold_CODA)
+      ## spe need change reactive value if needed apply_CODA
+      meta$apply_CODA=data$meta.apply_CODA
+      updateCheckboxGroupInput(session, "preprocess", selected = data$meta.preprocess)# tsne_whiten
+      updateNumericInput(session,"tsne_initial_dims",value = data$meta.tsne_initial_dims)
+      updateNumericInput(session,"tsne_perplexity",value = data$meta.tsne_perplexity)
+      updateNumericInput(session,"tsne_max_iter",value = data$meta.tsne_max_iter)
+      updateCheckboxInput(session, "tsne_whiten", value = data$meta.tsne_whiten)
+      updateNumericInput(session,"tsne_theta",value = data$meta.tsne_theta)
+      updateCheckboxInput(session, "tsne_pca", value = data$meta.tsne_pca)
+      updateNumericInput(session,"kmeans_center",value = data$meta.kmeans_center)
+      updateNumericInput(session,"kmeans_iter_max",value = data$meta.kmeans_iter_max)
+    }
   })
 
+  output$Data_2_use = renderUI({
+    if(input$Data_2_use == "Check_point_file"){
+      fileInput("checkpoint_upload","checkpoint Rdata file")
+    }else if(input$Data_2_use == "Your_own_data"){
+      fileInput("file_MS","mzXML file")
+    }else if(input$Data_2_use == "Demo_file"){
+      truc = dir("www/",pattern = ".RData",ignore.case = T)
+      tagList(
+        selectizeInput("Demo_file","select the demo file to use",choices = truc,selected = truc[[1]]),
+        h4("Demo file loaded")
+      )
+
+    }
+  })
+  outputOptions(output, "mode", suspendWhenHidden = FALSE)
 }
