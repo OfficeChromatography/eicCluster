@@ -3,5 +3,6 @@
 .RData
 .Ruserdata
 /inst/paper
+/inst/data
 /inst/draft
 admin.R
