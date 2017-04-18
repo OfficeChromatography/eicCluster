@@ -193,7 +193,18 @@ server <- function(input, output,session) {
         need(!is.null(input$file_MS),"Upload a mzXML file")
       )
       withProgress(message = "Reading file", value=0, {
-        readMzXmlFile(input$file_MS$datapath)
+        if(length(input$file_MS$datapath) == 1){
+          readMzXmlFile(input$file_MS$datapath)## here need multiple
+        }else{
+          truc = readMzXmlFile(input$file_MS$datapath[1])
+          for(i in 2:length(input$file_MS$datapath)){
+            truc = append(truc,readMzXmlFile(input$file_MS$datapath[i]))
+          }
+          truc
+          # truc = lapply(input$file_MS$datapath,readMzXmlFile)
+          # append(truc)
+        }
+
       })
     }else if(input$Data_2_use == "Demo_file"){
       checkpoint()$data.ls
@@ -702,7 +713,7 @@ server <- function(input, output,session) {
     if(input$Data_2_use == "Check_point_file"){
       fileInput("checkpoint_upload","checkpoint Rdata file")
     }else if(input$Data_2_use == "Your_own_data"){
-      fileInput("file_MS","mzXML file")
+      fileInput("file_MS","mzXML file",multiple = T)
     }else if(input$Data_2_use == "Demo_file"){
       truc = dir("www/",pattern = ".RData",ignore.case = T)
       tagList(
