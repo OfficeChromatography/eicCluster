@@ -164,7 +164,8 @@ dashboardPage(
                        plotOutput("VarSel_fullscan",height = "300px",dblclick = "dblclick.VarSel_fullscan",
                                   brush = brushOpts(id = "brush.VarSel_fullscan",resetOnNew = TRUE,direction = "x"))
                      )
-                     )
+                     ),
+              dataTableOutput("Visu_data_table")
 
       ),
       tabItem("Report",

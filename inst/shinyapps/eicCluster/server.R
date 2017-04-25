@@ -540,6 +540,21 @@ server <- function(input, output,session) {
       text(x=df[1:10,1],y=df[1:10,2],labels=df[1:10,1],pos=3)
     }
   })
+  output$Visu_data_table = renderDataTable({
+    validate(
+      need(!is.null(VarSel_selected$index),"Please select a cluster")
+    )
+    if(length(VarSel_selected$index)>1){
+      df <- data.frame(x = as.numeric(rownames(data.VarSel$eic[VarSel_selected$index,])),y = apply(data.VarSel$eic[VarSel_selected$index,],1,sum))
+      if(!is.null(range.mz$x)){df <- df[df$x <= range.mz$x[2] & df$x >= range.mz$x[1],]}
+      validate(
+        need(nrow(df) >0,"No selected masses in this range, double click to reset the range")
+      )
+      df <- df[order(df[,2],decreasing = T),]
+      colnames(df) = c("m/z","intensity")
+      df
+    }
+  })
   output$VarSel_fullfullscan <- renderPlot({ ## the fullfullscan means the full scan over the whole time range
     par(yaxs="i", xaxs="i",mar=c(5, 4, 3, 2))
     validate(
