@@ -21,6 +21,9 @@
 library(shiny)
 library(readMzXmlData)
 library(tsne)
+library(ggplot2)
+library(ggrepel)
+library(rhandsontable)
 
 options(shiny.maxRequestSize=1000*1024^2)
 
@@ -45,17 +48,7 @@ server <- function(input, output,session) {
     index$last = 1
   })
 
-  reported <- reactiveValues(l = list()) # use to store cluster for report
-  observeEvent(input$VarSel_EIC_report,{
-    truc = list(x=VarSel_selected$x,y=VarSel_selected$y,index=VarSel_selected$index)
-    if(length(reported$l) == 0){
-      reported$l[[length(reported$l)+1]] = truc ## if first time, append truc
-    }else if(reported$l[[length(reported$l)]]$x[1] == truc$x[1] & reported$l[[length(reported$l)]]$x[2] == truc$x[2]){
-      reported$l = list() ## else if last == truc, reset
-    }else{
-      reported$l[[length(reported$l)+1]] = truc ## else, append
-    }
-  })
+
 
   ## observeEvent Interactive
   range.mz <- reactiveValues(x = NULL) # to zoom inside the mass spectrum, react to a few interaction but easy
@@ -112,8 +105,10 @@ server <- function(input, output,session) {
 
   data.VarSel <- reactiveValues(eic_before_CODA = NULL,eic=NULL,model=NULL,algo=NULL,keep=NULL,range.time=NULL)
   observeEvent(data.ls(),{
-    range.time$x[1] = 1
-    range.time$x[2] = length(data.ls())/length(cond())
+    if(input$Data_2_use == "Your_own_data"){
+      range.time$x[1] = 1
+      range.time$x[2] = length(data.ls())/length(cond())
+    }
   })
 
   range.time <- reactiveValues(x = NULL) # to zoom inside the TIC
@@ -167,11 +162,11 @@ server <- function(input, output,session) {
   })
   observeEvent(input$VarSel_EIC_exclude, {
     data.VarSel$keep[VarSel_selected$index] = F
-    reported$l = list()
+    # reported$l = list()
   })
   observeEvent(input$VarSel_EIC_exclude_reset, {
     data.VarSel$keep = rep(T,nrow(data.VarSel$eic))
-    reported$l = list()
+    # reported$l = list()
   })
 
   ## Observe Event data
@@ -411,13 +406,34 @@ server <- function(input, output,session) {
     )
     par(yaxs="i", xaxs="i")
     plot(df,type = "h",
-         xlab="m/z",ylab="intensity",xlim=range.mz$x, ylim=c(0,df[1,2]*1.1),
+         xlab=expression(italic(m/z)),ylab="Intensity [AU]",xlim=range.mz$x, ylim=c(0,df[1,2]*1.1),
          main=paste0(names(cond())[index$cond],"\nRf = ",getTime(data,index$index)," min ; base peak Mz = ",round(df[1,1],4),
                      " ; base peak intensity = ",df[1,2],"\n",
                      "peaks count = ",nrow(df)," ; totIonCurrent = ",round(sum(df[,2])))
     )
     text(x=df[1:10,1],y=df[1:10,2],labels=round(df[1:10,1],4),pos=3)
   })
+  # output$prep_fullscan <- renderPlot({
+  #   data = data.ls()
+  #   df = data.frame(x=data[[index$index]]$spectrum$mass,y=data[[index$index]]$spectrum$intensity)
+  #   if(!is.null(range.mz$x)){df <- df[df$x <= range.mz$x[2] & df$x >= range.mz$x[1],]}
+  #   df <- df[order(df[,2],decreasing = T),]
+  #   par(yaxs="i", xaxs="i",mar=c(5, 4, 3, 2))
+  #   validate(
+  #     need(nrow(df) >0,"No selected masses in this range, double click to reset the range")
+  #   )
+  #   # par(yaxs="i", xaxs="i")
+  #   # plot(df,type = "h",
+  #   #      xlab=expression(italic(m/z)),ylab="intensity",xlim=range.mz$x, ylim=c(0,df[1,2]*1.1),
+  #   #      main=paste0(names(cond())[index$cond],"\nRf = ",getTime(data,index$index)," min ; base peak Mz = ",round(df[1,1],4),
+  #   #                  " ; base peak intensity = ",df[1,2],"\n",
+  #   #                  "peaks count = ",nrow(df)," ; totIonCurrent = ",round(sum(df[,2])))
+  #   # )
+  #   ggplot(df,aes(x=x,xend=x,y=0,yend=y))+geom_segment()+#+coord_cartesian(ylim = range(df$y))
+  #     geom_text_repel(aes(x=x,y=y, label = round(df[,1],4)))
+  #   # text(x=df[1:10,1],y=df[1:10,2],labels=round(df[1:10,1],4),pos=3)
+  #
+  # })
   output$scroreplot_cross = renderUI({
     selectizeInput("scroreplot_cross","select the masses to highlight",choices = rownames(data.VarSel$eic),selected = NULL,multiple = T)
   })
@@ -458,7 +474,7 @@ server <- function(input, output,session) {
     }else if(input$VarSel_eic_pch == "circles"){
       plot(data.VarSel$model[data.VarSel$keep,],xlim = xlim, ylim = ylim,xlab="",ylab="",col=Col)
     }
-    title(main=data.VarSel$algo,xlab = "dimension 1",ylab="dimension 2")
+    title(main=data.VarSel$algo,xlab = "x",ylab="y")
     ## add the scoreplot_cross if applicable
     if(!is.null(input$scroreplot_cross)){
       text(x=data.VarSel$model[input$scroreplot_cross,1],y=data.VarSel$model[input$scroreplot_cross,2],labels="X",col="darkgreen",cex=3)
@@ -468,6 +484,16 @@ server <- function(input, output,session) {
     z <- MASS::kde2d(data.VarSel$model[,1], data.VarSel$model[,2], n=50)
     contour(z, drawlabels=FALSE, nlevels=11, col=my.cols, add=TRUE)
 
+    if(length(reported$l) != 0){
+      for(i in seq(length(reported$l))){## plot the selected cluster if applicable
+        symbols(x=mean(reported$l[[i]]$x),y=mean(reported$l[[i]]$y),
+                rectangles = rbind(c(reported$l[[i]]$x[2]-reported$l[[i]]$x[1],reported$l[[i]]$y[2]-reported$l[[i]]$y[1])),
+                add=T,inches = F,lwd=2)
+        text(x=reported$l[[i]]$x[1],y=reported$l[[i]]$y[2],label=i,pos=2,cex=2)
+      }
+    }
+
+
     ## add the selected zone if aplicable
     if(!is.null(VarSel_selected$x)){
       symbols(x=mean(VarSel_selected$x),y=mean(VarSel_selected$y),
@@ -476,7 +502,7 @@ server <- function(input, output,session) {
     }
   })
   output$VarSel_eic <- renderPlot({
-    leg = c("tic")
+    leg = c("TIC")
     col = c("black")
     validate(
       need(!is.null(data.VarSel$model),"Please do the Clusterisation")
@@ -486,7 +512,7 @@ server <- function(input, output,session) {
     # x2 = range.time$x[1]:range.time$x[2]
     tic.len = 10#round(10*length(x2)/length(x))
     par(mar=c(5, 4, 3, 5),mgp=c(2,0.5,0))
-    plot(x=x,y=apply(data.VarSel$eic[data.VarSel$keep,],2,sum),type="l",xlab="time (min)",ylab="Intensity",xaxt="n",xlim=range.time$x)
+    plot(x=x,y=apply(data.VarSel$eic[data.VarSel$keep,],2,sum),type="l",xlab="time (min)",ylab="Intensity [AU]",xaxt="n",xlim=range.time$x)
 
     axis(side = 1,at=seq(data.VarSel$range.time[1],data.VarSel$range.time[2],length.out = tic.len),
          labels = round(seq(getTime(data,x[1]*length(cond())),getTime(data,x[length(x)]*length(cond())),length.out = tic.len),2))
@@ -536,7 +562,7 @@ server <- function(input, output,session) {
         need(nrow(df) >0,"No selected masses in this range, double click to reset the range")
       )
       df <- df[order(df[,2],decreasing = T),]
-      plot(df,type="h",xlim=range.mz$x,ylab="intensity",xlab="mz",ylim=c(0,df[1,2]*1.1),main="selected masses")
+      plot(df,type="h",xlim=range.mz$x,ylab="Intensity [AU]",xlab=expression(italic(m/z)),ylim=c(0,df[1,2]*1.1),main="selected masses")
       text(x=df[1:10,1],y=df[1:10,2],labels=df[1:10,1],pos=3)
     }
   })
@@ -567,7 +593,7 @@ server <- function(input, output,session) {
       need(nrow(df) >0,"No selected masses in this range, double click to reset the range")
     )
     df <- df[order(df[,2],decreasing = T),]
-    plot(df,type="h",xlim=range.mz$x,ylab="intensity",xlab="mz",ylim=c(0,df[1,2]*1.1),main="full scan")
+    plot(df,type="h",xlim=range.mz$x,ylab="Intensity [AU]",xlab=expression(italic(m/z)),ylim=c(0,df[1,2]*1.1),main="full scan")
     text(x=df[1:10,1],y=df[1:10,2],labels=df[1:10,1],pos=3)
   })
   spectrum_df <- reactive({
@@ -586,45 +612,41 @@ server <- function(input, output,session) {
     )
     par(yaxs="i", xaxs="i")
     plot(df,type = "h",
-         xlab="m/z",ylab="intensity",xlim=range.mz$x, ylim=c(0,df[1,2]*1.1),
+         xlab=expression(italic(m/z)),ylab="Intensity [AU]",xlim=range.mz$x, ylim=c(0,df[1,2]*1.1),
          main=paste0(names(cond())[index$cond],"\nRf = ",getTime(data,index$index)," min ; base peak Mz = ",round(df[1,1],4),
                      " ; base peak intensity = ",df[1,2],"\n",
                      "peaks count = ",nrow(df)," ; totIonCurrent = ",round(sum(df[,2])))
     )
     text(x=df[1:10,1],y=df[1:10,2],labels=round(df[1:10,1],4),pos=3)
   })
-  output$report_choices = renderUI({
-    validate(need(length(reported$l) > 0 , "select at least a cluster"))
-    choices = seq(length(reported$l))
-    checkboxGroupInput("report_choices","Report include",choices = choices)
-  })
-  output$report_preview_choices = renderUI({
-    validate(need(length(reported$l) > 0 , "select at least a cluster"))
-    choices = seq(length(reported$l))
-    selectizeInput("report_preview_choices","Report include",choices = choices)
-  })
-  output$report_preview = renderPlot({
-    i = reported$l[[as.numeric(input$report_preview_choices)]]
-    Int <- apply(data.VarSel$eic,1,sum)
-    rbPal <- colorRampPalette(c('blue','red'))
-    Col <- rbPal(10)[as.numeric(cut(log10(Int),breaks = 10))]
-      plot(data.VarSel$model,type="n",xlab="",ylab="")
-      text(data.VarSel$model,labels=rownames(data.VarSel$eic),col=Col,cex = 0.5)
-    title(main=data.VarSel$algo,xlab = "dimension 1",ylab="dimension 2")
-    ## add the scoreplot_cross if applicable
-    # if(!is.null(input$scroreplot_cross)){
-    #   text(x=data.VarSel$model[input$scroreplot_cross,1],y=data.VarSel$model[input$scroreplot_cross,2],labels="X",col="darkgreen",cex=3)
-    # }
-    ## add the contour
-    my.cols <- rev(RColorBrewer::brewer.pal(11, "RdYlBu"))
-    z <- MASS::kde2d(data.VarSel$model[,1], data.VarSel$model[,2], n=50)
-    contour(z, drawlabels=FALSE, nlevels=11, col=my.cols, add=TRUE)
 
-    ## add the selected zone if aplicable
-      symbols(x=mean(i$x),y=mean(i$y),
-              rectangles = rbind(c(i$x[2]-i$x[1],i$y[2]-i$y[1])),
-              add=T,inches = F,fg="darkgreen",lwd=2)
-  })
+  # output$report_preview_choices = renderUI({
+  #   validate(need(length(reported$l) > 0 , "select at least a cluster"))
+  #   choices = seq(length(reported$l))
+  #   selectizeInput("report_preview_choices","Report include",choices = choices)
+  # })
+  # output$report_preview = renderPlot({
+  #   i = reported$l[[as.numeric(input$report_preview_choices)]]
+  #   Int <- apply(data.VarSel$eic,1,sum)
+  #   rbPal <- colorRampPalette(c('blue','red'))
+  #   Col <- rbPal(10)[as.numeric(cut(log10(Int),breaks = 10))]
+  #     plot(data.VarSel$model,type="n",xlab="",ylab="")
+  #     text(data.VarSel$model,labels=rownames(data.VarSel$eic),col=Col,cex = 0.5)
+  #   title(main=data.VarSel$algo,xlab = "dimension 1",ylab="dimension 2")
+  #   ## add the scoreplot_cross if applicable
+  #   # if(!is.null(input$scroreplot_cross)){
+  #   #   text(x=data.VarSel$model[input$scroreplot_cross,1],y=data.VarSel$model[input$scroreplot_cross,2],labels="X",col="darkgreen",cex=3)
+  #   # }
+  #   ## add the contour
+  #   my.cols <- rev(RColorBrewer::brewer.pal(11, "RdYlBu"))
+  #   z <- MASS::kde2d(data.VarSel$model[,1], data.VarSel$model[,2], n=50)
+  #   contour(z, drawlabels=FALSE, nlevels=11, col=my.cols, add=TRUE)
+  #
+  #   ## add the selected zone if aplicable
+  #     symbols(x=mean(i$x),y=mean(i$y),
+  #             rectangles = rbind(c(i$x[2]-i$x[1],i$y[2]-i$y[1])),
+  #             add=T,inches = F,fg="darkgreen",lwd=2)
+  # })
 
   output$Report <- downloadHandler(
     filename = function() {
@@ -653,7 +675,7 @@ server <- function(input, output,session) {
   output$checkpoint_download = downloadHandler(
     filename = function(x){"eic2_checkpoint.RData"},
     content = function(con) {
-      assign("data",list(index = index$index,cond=index$index,last=index$index,reported=reported$l,
+      assign("data",list(index = index$index,cond=index$index,last=index$index,reported=reported$l,#reported.table = reported$table,
                          range.mz.x = range.mz$x,range.time.x = range.time$x,range.scoreplot.x=range.scoreplot$x,range.scoreplot.y=range.scoreplot$y,
                          data.VarSel.eic_before_CODA = data.VarSel$eic_before_CODA,data.VarSel.eic = data.VarSel$eic, data.VarSel.model = data.VarSel$model, data.VarSel.algo = data.VarSel$algo, data.VarSel.keep = data.VarSel$keep,data.VarSel.range.time = data.VarSel$range.time,
                          VarSel_selected.index = VarSel_selected$index, VarSel_selected.x = VarSel_selected$x, VarSel_selected.y = VarSel_selected$y,
@@ -669,6 +691,7 @@ server <- function(input, output,session) {
   )
 
   checkpoint = reactive({
+    # validate(need(input$Data_2_use != "Your own data","Error"))
     if(input$Data_2_use == "Check_point_file"){
       validate(need(!is.null(input$checkpoint_upload),"Upload a checkpoint file"))
       load(input$checkpoint_upload$datapath)
@@ -685,7 +708,7 @@ server <- function(input, output,session) {
                         preprocess = NULL,
                         tsne_initial_dims=NULL,tsne_perplexity=NULL,tsne_max_iter=NULL,tsne_whiten=NULL,tsne_pca=NULL,tsne_theta=NULL,kmeans_center=NULL,kmeans_iter_max=NULL)
 
-  observe({
+  observeEvent(input$Data_2_use,{
     if(input$Data_2_use == "Your_own_data"){ ## do we need to reboot everybody ??
 
       index$index=1;index$cond=1;index$last=1
@@ -695,33 +718,45 @@ server <- function(input, output,session) {
       range.time$x = NULL # to zoom inside the TIC
       range.scoreplot$x = NULL; range.scoreplot$y = NULL # to zoom inside the scoreplot
       VarSel_selected$index=c();VarSel_selected$x = NULL;VarSel_selected$y = NULL # triggered when cluster selected
-    }else{
+    }
+  })
+
+  observeEvent(input$checkpoint_upload$datapath,{
+    # validate(need(!is.null(checkpoint()),"Error"))
       data = checkpoint()
       data$index -> index$index;data$cond->index$index;data$last->index$index;data$reported->reported$l;
       data$range.mz.x -> range.mz$x; data$range.time.x -> range.time$x; data$range.scoreplot.x->range.scoreplot$x; data$range.scoreplot.y->range.scoreplot$y;
       data$data.VarSel.eic_before_CODA -> data.VarSel$eic_before_CODA;data$data.VarSel.eic -> data.VarSel$eic; data$data.VarSel.model -> data.VarSel$model;
       data$data.VarSel.algo -> data.VarSel$algo; data$data.VarSel.keep -> data.VarSel$keep;data$data.VarSel.range.time -> data.VarSel$range.time;
       data$VarSel_selected.index -> VarSel_selected$index; data$VarSel_selected.x -> VarSel_selected$x; data$VarSel_selected.y -> VarSel_selected$y
-      updateNumericInput(session,"Int_treshold",value = data$meta.Int_treshold)
-      updateNumericInput(session,"range_mz_mini",value = data$meta.range_mz_mini)
-      updateNumericInput(session,"range_mz_maxi",value = data$meta.range_mz_maxi)
-      updateNumericInput(session,"bucketing_increment",value = data$meta.bucketing_increment)
-      updateSelectizeInput(session,"mode",selected=data$meta.mode)
-      updateNumericInput(session,"window_CODA",value = data$meta.window_CODA)
-      updateNumericInput(session,"smoothing_CODA",value = data$meta.smoothing_CODA)
-      updateNumericInput(session,"threshold_CODA",value = data$meta.threshold_CODA)
+      updateNumericInput(session,"Int_treshold",value = data$meta.Int_treshold);data$meta.Int_treshold -> meta$Int_treshold
+      updateNumericInput(session,"range_mz_mini",value = data$meta.range_mz_mini);data$meta.range_mz_mini -> meta$range_mz_mini
+      updateNumericInput(session,"range_mz_maxi",value = data$meta.range_mz_maxi);data$meta.range_mz_maxi -> meta$range_mz_maxi
+      updateNumericInput(session,"bucketing_increment",value = data$meta.bucketing_increment);data$meta.bucketing_increment -> meta$bucketing_increment
+      updateSelectizeInput(session,"mode",selected=data$meta.mode);data$meta.mode -> meta$mode
+      updateNumericInput(session,"window_CODA",value = data$meta.window_CODA);data$meta.window_CODA -> meta$window_CODA
+      updateNumericInput(session,"smoothing_CODA",value = data$meta.smoothing_CODA);data$meta.smoothing_CODA -> meta$smoothing_CODA
+      updateNumericInput(session,"threshold_CODA",value = data$meta.threshold_CODA);data$meta.threshold_CODA -> meta$threshold_CODA
       ## spe need change reactive value if needed apply_CODA
       meta$apply_CODA=data$meta.apply_CODA
-      updateCheckboxGroupInput(session, "preprocess", selected = data$meta.preprocess)# tsne_whiten
-      updateNumericInput(session,"tsne_initial_dims",value = data$meta.tsne_initial_dims)
-      updateNumericInput(session,"tsne_perplexity",value = data$meta.tsne_perplexity)
-      updateNumericInput(session,"tsne_max_iter",value = data$meta.tsne_max_iter)
-      updateCheckboxInput(session, "tsne_whiten", value = data$meta.tsne_whiten)
-      updateNumericInput(session,"tsne_theta",value = data$meta.tsne_theta)
-      updateCheckboxInput(session, "tsne_pca", value = data$meta.tsne_pca)
-      updateNumericInput(session,"kmeans_center",value = data$meta.kmeans_center)
-      updateNumericInput(session,"kmeans_iter_max",value = data$meta.kmeans_iter_max)
-    }
+      updateCheckboxGroupInput(session, "preprocess", selected = data$meta.preprocess);data$meta.preprocess -> meta$preprocess
+      updateNumericInput(session,"tsne_initial_dims",value = data$meta.tsne_initial_dims);data$meta.tsne_initial_dims -> meta$tsne_initial_dims
+      updateNumericInput(session,"tsne_perplexity",value = data$meta.tsne_perplexity);data$meta.tsne_perplexity -> meta$tsne_perplexity
+      updateNumericInput(session,"tsne_max_iter",value = data$meta.tsne_max_iter);data$meta.tsne_max_iter -> meta$tsne_max_iter
+      updateCheckboxInput(session, "tsne_whiten", value = data$meta.tsne_whiten);data$meta.tsne_whiten -> meta$tsne_whiten
+      updateNumericInput(session,"tsne_theta",value = data$meta.tsne_theta);data$meta.tsne_theta -> meta$tsne_theta
+      updateCheckboxInput(session, "tsne_pca", value = data$meta.tsne_pca);data$meta.tsne_pca -> meta$tsne_pca
+      updateNumericInput(session,"kmeans_center",value = data$meta.kmeans_center);data$meta.kmeans_center -> meta$kmeans_center
+      updateNumericInput(session,"kmeans_iter_max",value = data$meta.kmeans_iter_max);data$meta.kmeans_iter_max -> meta$kmeans_iter_max
+      # if(!is.null(data$reported.table)){
+      #   data$reported.table -> reported$table
+      # }else{
+      #     l=length(reported$l);reported$table = data.frame(content=rep("",l),color=rep("black",l),show=rep(T,l),delete=rep(F,l))
+      #     # reported$table[,1] = as.character(reported$table[,1])
+      #     # reported$table[,2] = as.character(reported$table[,2])
+      #     # reported$table[,3] = as.logical(reported$table[,3])
+      #     # reported$table[,4] = as.logical(reported$table[,4])
+      #     }
   })
 
   output$Data_2_use = renderUI({
@@ -738,5 +773,65 @@ server <- function(input, output,session) {
 
     }
   })
+
+  output$report_choices = renderUI({
+    validate(need(length(reported$l) > 0 , "select at least a cluster"))
+    choices = seq(length(reported$l))
+    selectizeInput("report_choices","Report include",choices = choices,multiple=T,selected=choices)
+  })
+
+  output$reported_show = renderUI({
+    validate(need(length(reported$l) > 0 , "select at least a cluster"))
+      selectizeInput("reported_show","Reported show",choices = c("",seq(length(reported$l))),selected = "")
+  })
+  observeEvent(input$reported_show,{
+    if(input$reported_show != "" && length(reported$l) > 0){
+      VarSel_selected$index <- reported$l[[as.numeric(input$reported_show)]]$index
+
+      VarSel_selected$x <- reported$l[[as.numeric(input$reported_show)]]$x
+      VarSel_selected$y <- reported$l[[as.numeric(input$reported_show)]]$y
+    }
+  })
+  observeEvent(input$reported_delete,{
+    if(input$reported_show != ""){
+      reported$l[[as.numeric(input$reported_show)]] = NULL
+    }
+  })
+
+  reported <- reactiveValues(l = list(),table = data.frame()) # use to store cluster for report
+  observeEvent(input$VarSel_EIC_report,{
+    truc = list(x=VarSel_selected$x,y=VarSel_selected$y,index=VarSel_selected$index,xlim=range.mz$x,pch = input$VarSel_eic_pch)
+    # reported$l[[length(reported$l)+1]] = truc ## else, append
+    # if(length(reported$l) == 0){
+      reported$l[[length(reported$l)+1]] = truc ## if first time, append truc
+    # }else if(reported$l[[length(reported$l)]]$x[1] == truc$x[1] & reported$l[[length(reported$l)]]$x[2] == truc$x[2]){
+    #   reported$l = list() ## else if last == truc, reset
+    # }else{
+    #   reported$l[[length(reported$l)+1]] = truc
+    # }
+    # reported$table = rbind(
+    #   reported$table,
+    #   c(
+    #     # xmin=VarSel_selected$x[1],xmax=VarSel_selected$x[2],
+    #     # ymin=VarSel_selected$y[1],ymax=VarSel_selected$y[2],
+    #     "","black",T,F)
+    # )
+    # colnames(reported$table) = c(#"xmin","xmax","ymin","ymax",
+    #                              "content","color","show","delete")
+    # reported$table[,1] = as.character(reported$table[,1])
+    # reported$table[,2] = as.character(reported$table[,2])
+    # reported$table[,3] = as.logical(reported$table[,3])
+    # reported$table[,4] = as.logical(reported$table[,4])
+  })
+
+  # output$Selected_table = renderRHandsontable({
+  #   data = reported$table
+  #   rhandsontable(data)
+  # })
+  # observeEvent(input$Selected_table_update,{
+  #   reported$table = hot_to_r(input$Selected_table)
+  #   reported$l[which(reported$table$delete)] = NULL
+  #   reported$table = reported$table[!reported$table$delete,]
+  # })
   outputOptions(output, "mode", suspendWhenHidden = FALSE)
 }

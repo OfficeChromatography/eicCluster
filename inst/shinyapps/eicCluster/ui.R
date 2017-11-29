@@ -19,6 +19,7 @@
 library(shiny)
 library(shinydashboard)
 library(shinyBS)
+library(rhandsontable)
 # source("OrbiPrep.R")
 
 dashboardPage(
@@ -28,7 +29,7 @@ dashboardPage(
       menuItem("Input", tabName = "Input"),
       menuItem("Preparation", tabName = "Preparation"),
       menuItem("Visualization", tabName = "Visualization"),
-      menuItem("Report",tabName = "Report"),
+      # menuItem("Report",tabName = "Report"),
       menuItem("About",tabName = "About")
     )
   ),
@@ -133,8 +134,8 @@ dashboardPage(
       ),
       tabItem("Visualization",
               column(12,
-                     div(style="display: inline-block;vertical-align:top; width: 200px;",actionButton("VarSel_EIC_bis","Plot the selection")),
-                     div(style="display: inline-block;vertical-align:top; width: 200px;",actionButton("VarSel_EIC_report","Select for report")),
+                     div(style="display: inline-block;vertical-align:top; width: 150px;",actionButton("VarSel_EIC_bis","Plot the selection")),
+                     div(style="display: inline-block;vertical-align:top; width: 150px;",actionButton("VarSel_EIC_report","Select for report")),
                      bsTooltip("VarSel_EIC_report", "Click to store the current selection for the report, click two times to reset the selection (no double click, just a second time)", placement = "bottom", trigger = "hover"),
 
                      div(style="display: inline-block;vertical-align:top; width: 200px;",checkboxInput("VarSel_eic_normalize","Use same scale for eic and tic",T)),
@@ -143,14 +144,23 @@ dashboardPage(
                      div(style="display: inline-block;vertical-align:top; width: 200px;",uiOutput("scroreplot_cross")),
                      div(style="display: inline-block;vertical-align:top; width: 200px;",actionButton("VarSel_EIC_exclude","Exclude from plots")),
                      div(style="display: inline-block;vertical-align:top; width: 200px;",actionButton("VarSel_EIC_exclude_reset","Reset the exclusion")),
+                     div(style="display: inline-block;vertical-align:top; width: 200px;",uiOutput("reported_show")),
+                     div(style="display: inline-block;vertical-align:top; width: 150px;",actionButton("reported_delete","Delete from selected")),
+                     div(style="display: inline-block;vertical-align:top; width: 200px;",uiOutput("report_choices")),
+                     div(style="display: inline-block;vertical-align:top; width: 150px;",selectizeInput('format', 'Document format', c('PDF', 'HTML', 'Word'))),
+                     div(style="display: inline-block;vertical-align:top; width: 150px;",downloadButton("Report")),
                      bsTooltip("VarSel_EIC_exclude", "Click to exclude the current selection from the score-plot, the tic, the eic, the full scan averaged. This will also reset the selection for report.", placement = "bottom", trigger = "hover")
 
                      ),
 
               column(6,
-                     plotOutput("VarSel_scorePlot",dblclick = "dblclick.VarSel_scorePlot",
-                                brush = brushOpts(id = "brush.VarSel_scorePlot",resetOnNew = TRUE),height = "1200"),
-                     bsTooltip("VarSel_scorePlot", "EIC are clusterized with the selected algorithm. Select a zone and click on the Plot the selection button to access the spectrum and EIC, it is also possible to dbl-click to zoom and dezoom.", placement = "bottom", trigger = "hover")
+                     fluidRow(
+                           plotOutput("VarSel_scorePlot",dblclick = "dblclick.VarSel_scorePlot",
+                                      brush = brushOpts(id = "brush.VarSel_scorePlot",resetOnNew = TRUE),height = "1200"),
+                           bsTooltip("VarSel_scorePlot", "EIC are clusterized with the selected algorithm. Select a zone and click on the Plot the selection button to access the spectrum and EIC, it is also possible to dbl-click to zoom and dezoom.",
+                                     placement = "bottom", trigger = "hover"),
+                           dataTableOutput("Visu_data_table")
+                    )
                      ),
               column(6,
 
@@ -162,24 +172,24 @@ dashboardPage(
                        plotOutput("VarSel_fullfullscan",height = "300px",dblclick = "dblclick.VarSel_fullfullscan",
                                   brush = brushOpts(id = "brush.VarSel_fullfullscan",resetOnNew = TRUE,direction = "x")),
                        plotOutput("VarSel_fullscan",height = "300px",dblclick = "dblclick.VarSel_fullscan",
-                                  brush = brushOpts(id = "brush.VarSel_fullscan",resetOnNew = TRUE,direction = "x"))
+                                  brush = brushOpts(id = "brush.VarSel_fullscan",resetOnNew = TRUE,direction = "x"))#,
+                       # actionButton("Selected_table_update","Update table"),
+                       # rHandsontableOutput("Selected_table")
                      )
-                     ),
-              dataTableOutput("Visu_data_table")
+                     )
 
       ),
-      tabItem("Report",
-              column(3,
-                     uiOutput("report_choices"),
-                     radioButtons('format', 'Document format', c('PDF', 'HTML', 'Word'),
-                                  inline = TRUE),
-                     downloadButton("Report")
-                     ),
-              column(9,
-                     uiOutput("report_preview_choices"),
-                     plotOutput("report_preview")
-                     )
-              ),
+      # tabItem("Report",
+      #         column(3,
+      #                uiOutput("report_choices"),
+      #                selectizeInput('format', 'Document format', c('PDF', 'HTML', 'Word')),
+      #                downloadButton("Report")
+      #                ),
+      #         column(9,
+      #                uiOutput("report_preview_choices"),
+      #                plotOutput("report_preview")
+      #                )
+      #         ),
       tabItem("About",
               includeMarkdown("README.md")
       )

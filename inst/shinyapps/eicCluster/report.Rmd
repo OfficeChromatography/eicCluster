@@ -12,6 +12,54 @@ library(knitr)
 library(xtable)
 ```
 
+```{r,results='asis'}
+if(!meta$apply_CODA){
+    CODA = c("CODA applied" = FALSE)
+  }else{
+    CODA = c("CODA applied" = FALSE,
+      "window_CODA" = meta$window_CODA,
+      "smoothing_CODA" = meta$smoothing_CODA,
+      "threshold_CODA" = meta$threshold_CODA)
+  }
+
+if("standardNormalVariate" %in% meta$preprocess){
+    SNV = c("standardNormalVariate" = TRUE)
+  }else{SNV = c("standardNormalVariate" = FALSE)}
+  if("scale" %in% meta$preprocess){
+    scaling = c("scale" = TRUE)
+  }else{scaling = c("scale" = FALSE)}
+
+prep = c(
+  "m/z minimum [Da]"=meta$range_mz_mini,
+  "m/z maximum [Da]"=meta$range_mz_maxi,
+  "time minimum [min]"=getTime(data.ls(),data.VarSel$range.time[1]*length(cond())),
+  "time maximum [min]"=getTime(data.ls(),data.VarSel$range.time[2]*length(cond())),
+  "Ionisation mode"=names(cond())[meta$mode],
+  "Intensity treshold [AU]" = meta$Int_treshold,
+  "Bucketing increment [Da]" = meta$bucketing_increment
+)
+
+parameters = c(
+  prep,
+  CODA,SNV,scaling
+  
+  
+)
+
+# meta.tsne_pca=meta$tsne_pca,meta.tsne_theta=meta$tsne_theta,
+# meta.tsne_initial_dims=meta$tsne_initial_dims,meta.tsne_perplexity=meta$tsne_perplexity,meta.tsne_max_iter=meta$tsne_max_iter,meta.tsne_whiten=meta$tsne_whiten,meta.kmeans_center=meta$kmeans_center,meta.kmeans_iter_max=meta$kmeans_iter_max
+
+
+# param <- cbind(
+#   names(param),
+#     param
+#     )[,2:3]
+# colnames(param) = c("option","value")
+# kable(data,row.names=NA,col.names=NA)
+kable(parameters, caption = 'Parameters',row.names = T)
+
+```
+
 
 ```{r pict1}
 
@@ -19,20 +67,35 @@ for(i in as.numeric(input$report_choices)){
   i = reported$l[[i]]
   layout(cbind(c(1,1,2,2),c(3:6)))
   ## first the 2 scoreplot top no zoom, bottom zoom
-  par(mar=c(3,3,2,0.5),mgp=c(1.5,0.5,0),yaxs="r", xaxs="r")
+  par(mar=c(3,3,2,0.5),mgp=c(1.5,0.5,0),yaxs="r", xaxs="r",cex.main=0.9)
   for(j in c(T,F)){ 
     Int <- apply(data.VarSel$eic,1,sum)
     rbPal <- colorRampPalette(c('blue','red'))
     Col <- rbPal(10)[as.numeric(cut(log10(Int),breaks = 10))]
 
+    
     if(j){
-      plot(data.VarSel$model,type="n",xlab="",ylab="")
-      text(data.VarSel$model,labels=rownames(data.VarSel$eic),col=Col,cex = 0.5)
+      xlim = c(min(data.VarSel$model[,1]),max(data.VarSel$model[,1]))
+      ylim = c(min(data.VarSel$model[,2]),max(data.VarSel$model[,2]))
     }else{
-      plot(data.VarSel$model,type="n",xlim = i$x, ylim = i$y,xlab="",ylab="")
-      text(data.VarSel$model,labels=rownames(data.VarSel$eic),col=Col)
+      xlim = i$x
+      ylim = i$y
+      i$pch = "m/z"
     }
-    title(main=data.VarSel$algo,xlab = "dimension 1",ylab="dimension 2")
+    
+    if(is.null(i$pch)){i$pch = "m/z"}
+    
+    if(i$pch == "m/z"){
+      plot(data.VarSel$model,type="n",xlim = xlim, ylim = ylim,xlab="",ylab="")
+      text(data.VarSel$model,labels=rownames(data.VarSel$eic)[data.VarSel$keep],col=Col)
+    }else if(i$pch == "punct"){
+      plot(data.VarSel$model,type="n",xlim = xlim, ylim = ylim,xlab="",ylab="")
+      text(data.VarSel$model,labels=".",col=Col)
+    }else if(i$pch == "circles"){
+      plot(data.VarSel$model,xlim = xlim, ylim = ylim,xlab="",ylab="",col=Col)
+    }
+    
+    title(main=data.VarSel$algo,xlab = "x",ylab="y")
     ## add the scoreplot_cross if applicable
     # if(!is.null(input$scroreplot_cross)){
     #   text(x=data.VarSel$model[input$scroreplot_cross,1],y=data.VarSel$model[input$scroreplot_cross,2],labels="X",col="darkgreen",cex=3)
@@ -51,15 +114,15 @@ for(i in as.numeric(input$report_choices)){
   }
   
   ## TIC and EIC
-    leg = c("tic")
+    leg = c("TIC")
     col = c("black")
     
     data = data.ls()
-    x=range.time$x[1]:range.time$x[2]
+    x=data.VarSel$range.time[1]:data.VarSel$range.time[2]
     par(mar=c(3, 3, 2, 2))
     plot(x=x,y=apply(data.VarSel$eic,2,sum),type="l",xlab="time (min)",ylab="TIC intensity (cps)",xaxt="n")
 
-    axis(side = 1,at=seq(range.time$x[1],range.time$x[2],length.out = 10),
+    axis(side = 1,at=seq(data.VarSel$range.time[1],data.VarSel$range.time[2],length.out = 10),
          labels = round(seq(getTime(data,x[1]*length(cond())),getTime(data,x[length(x)]*length(cond())),length.out = 10),2))
     par(new=T)
     if(length(i$index)>1){
@@ -81,13 +144,15 @@ for(i in as.numeric(input$report_choices)){
     par(yaxs="i", xaxs="i",mar=c(3, 3, 2, 0.5),mgp=c(1.5,0.5,0))
     df <- data.frame(x = as.numeric(rownames(data.VarSel$eic[i$index,])),y = apply(data.VarSel$eic[i$index,],1,sum))
       df <- df[order(df[,2],decreasing = T),]
-      plot(df,type="h",xlim=range.mz_full(),ylab="intensity",xlab="mz",ylim=c(0,df[1,2]*1.2),main="Selected ion cluster")
+      # if(!is.null(i$xlim)){df = df[df[,1] > i$xlim[1] && df[,1] < i$xlim[2],]}
+      plot(df,type="h",xlim=if(!is.null(i$xlim)){i$xlim}else{range.mz_full()},ylab="intensity [AU]",xlab=expression(italic(m/z)),ylim=c(0,df[1,2]*1.2),main="Selected ion cluster")
       text(x=df[1:10,1],y=df[1:10,2],labels=df[1:10,1],pos=3)
       
   ## Averaged full scan
     df <- data.frame(x = as.numeric(rownames(data.VarSel$eic)),y = apply(data.VarSel$eic,1,sum))
     df <- df[order(df[,2],decreasing = T),]
-    plot(df,type="h",xlim=range.mz_full(),ylab="intensity",xlab="mz",ylim=c(0,df[1,2]*1.2),main="Averaged full scan")
+    # if(!is.null(i$xlim)){df = df[df[,1] > i$xlim[1] && df[,1] < i$xlim[2],]}
+    plot(df,type="h",xlim=if(!is.null(i$xlim)){i$xlim}else{range.mz_full()},ylab="intensity [AU]",xlab=expression(italic(m/z)),ylim=c(0,df[1,2]*1.2),main="Averaged full scan")
     text(x=df[1:10,1],y=df[1:10,2],labels=df[1:10,1],pos=3)
     
   ## full scan at maximum
@@ -95,7 +160,8 @@ for(i in as.numeric(input$report_choices)){
     ind = seq(as.numeric(input$mode),length(data),by=length(cond()))[index.max] ## truc refer to the TIC EIC spectrum defined before
     df = data.frame(x=data[[ind]]$spectrum$mass,y=data[[ind]]$spectrum$intensity)
     df <- df[order(df[,2],decreasing = T),]
-    plot(df,type="h",xlim=range.mz_full(),ylab="intensity",xlab="mz",ylim=c(0,df[1,2]*1.2),main="Full scan at cluster EIC maximum")
+    # if(!is.null(i$xlim)){df = df[df[,1] > i$xlim[1] && df[,1] < i$xlim[2],]}
+    plot(df,type="h",xlim=if(!is.null(i$xlim)){i$xlim}else{range.mz_full()},ylab="intensity [AU]",xlab=expression(italic(m/z)),ylim=c(0,df[1,2]*1.2),main="Full scan at cluster EIC maximum")
     text(x=df[1:10,1],y=df[1:10,2],labels=round(df[1:10,1],4),pos=3)
   
 }
