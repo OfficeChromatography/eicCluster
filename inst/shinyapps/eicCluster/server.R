@@ -698,7 +698,7 @@ server <- function(input, output,session) {
     }else if(input$Data_2_use == "Demo_file"){
       validate(need(!is.null(input$Demo_file),"Select a demo file"))
       load(paste0("www/",input$Demo_file))
-    }
+    }else{data = NULL}
     data
   })
 
@@ -721,8 +721,10 @@ server <- function(input, output,session) {
     }
   })
 
-  observeEvent(checkpoint(),{
-    if(!is.null(checkpoint())){
+  observeEvent({
+    input$checkpoint_upload$datapath
+    input$Demo_file},{
+    # validate(need(!is.null(checkpoint()),"Error"))
       data = checkpoint()
       data$index -> index$index;data$cond->index$index;data$last->index$index;data$reported->reported$l;
       data$range.mz.x -> range.mz$x; data$range.time.x -> range.time$x; data$range.scoreplot.x->range.scoreplot$x; data$range.scoreplot.y->range.scoreplot$y;
@@ -748,9 +750,15 @@ server <- function(input, output,session) {
       updateCheckboxInput(session, "tsne_pca", value = data$meta.tsne_pca);data$meta.tsne_pca -> meta$tsne_pca
       updateNumericInput(session,"kmeans_center",value = data$meta.kmeans_center);data$meta.kmeans_center -> meta$kmeans_center
       updateNumericInput(session,"kmeans_iter_max",value = data$meta.kmeans_iter_max);data$meta.kmeans_iter_max -> meta$kmeans_iter_max
-
-    }
-
+      # if(!is.null(data$reported.table)){
+      #   data$reported.table -> reported$table
+      # }else{
+      #     l=length(reported$l);reported$table = data.frame(content=rep("",l),color=rep("black",l),show=rep(T,l),delete=rep(F,l))
+      #     # reported$table[,1] = as.character(reported$table[,1])
+      #     # reported$table[,2] = as.character(reported$table[,2])
+      #     # reported$table[,3] = as.logical(reported$table[,3])
+      #     # reported$table[,4] = as.logical(reported$table[,4])
+      #     }
   })
 
   output$Data_2_use = renderUI({
