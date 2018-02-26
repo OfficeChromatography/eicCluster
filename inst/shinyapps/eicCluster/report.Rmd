@@ -76,120 +76,121 @@ kable(parameters, caption = 'Parameters',row.names = T)
 # par(cex=0.8)
 for(i in as.numeric(input$report_choices)){
   i = reported$l[[i]]
-  layout(cbind(c(1,1,2,2),c(3:6)))
-  ## first the 2 scoreplot top no zoom, bottom zoom
-  par(mar=c(3,3,2,0.5),mgp=c(1.5,0.5,0),yaxs="r", xaxs="r",cex.main=0.9)
-  for(j in c(T,F)){ 
-    Int <- apply(data.VarSel$eic,1,sum)
-    rbPal <- colorRampPalette(c('blue','red'))
-    Col <- rbPal(10)[as.numeric(cut(log10(Int),breaks = 10))]
-    
-    
-    if(j){
-      xlim = c(min(data.VarSel$model[,1]),max(data.VarSel$model[,1]))
-      ylim = c(min(data.VarSel$model[,2]),max(data.VarSel$model[,2]))
-    }else{
-      xlim = i$x
-      ylim = i$y
-      i$pch = "m/z"
-    }
-    
-    if(is.null(i$pch)){i$pch = "m/z"}
-    
-    if(i$pch == "m/z"){
-      plot(data.VarSel$model,type="n",xlim = xlim, ylim = ylim,xlab="",ylab="")
-      text(data.VarSel$model,labels=rownames(data.VarSel$eic)[data.VarSel$keep],col=Col)
-    }else if(i$pch == "punct"){
-      plot(data.VarSel$model,type="n",xlim = xlim, ylim = ylim,xlab="",ylab="")
-      text(data.VarSel$model,labels=".",col=Col)
-    }else if(i$pch == "circles"){
-      plot(data.VarSel$model,xlim = xlim, ylim = ylim,xlab="",ylab="",col=Col)
-    }
-    
-    title(main="2D cluster map",xlab = "x",ylab="y")
-    ## add the scoreplot_cross if applicable
-    # if(!is.null(input$scroreplot_cross)){
-    #   text(x=data.VarSel$model[input$scroreplot_cross,1],y=data.VarSel$model[input$scroreplot_cross,2],labels="X",col="darkgreen",cex=3)
-    # }
-    ## add the contour
-    my.cols <- rev(RColorBrewer::brewer.pal(11, "RdYlBu"))
-    z <- MASS::kde2d(data.VarSel$model[,1], data.VarSel$model[,2], n=50)
-    # contour(z, drawlabels=FALSE, nlevels=11, col=my.cols, add=TRUE)
-
-    ## add the selected zone if aplicable
-    if(j){
-      symbols(x=mean(i$x),y=mean(i$y),
-              rectangles = rbind(c(i$x[2]-i$x[1],i$y[2]-i$y[1])),
-              add=T,inches = F,fg="darkgreen",lwd=2)
-    }
-    # legend("bottomright",pch=20,col=Col[c(1,10)],legend = c(min(Int),max(Int)))
-  }
-  
-  ## TIC and EIC
-    leg = c("TIC")
-    col = c("black")
-    
-    data = data.ls()
-    x=data.VarSel$range.time[1]:data.VarSel$range.time[2]
-    tic = apply(data.VarSel$eic,2,sum)
-    par(mar=c(0.25, 4, 2.5, 1))
-    plot(x=x,y=tic,type="l",xlab="",ylab="Intensity [AU]",xaxt="n",yaxt="n")
-    title(main="TIC",line=1.5)
-    title(main="Selected EIC",line=0.5,col.main=2)
-    axis(side = 2,
-             labels=c(0,"","","",round(max(tic),-log10(max(tic))+1)),
-             at = seq(from=0,to=max(tic),length.out = 5),las=1,xpd=NA)
-    # axis(side = 1,at=round(seq(data.VarSel$range.time[1],data.VarSel$range.time[2],length.out = 10)),
-    #      labels = round(seq(getTime(data,x[1]*length(cond())),getTime(data,x[length(x)]*length(cond())),length.out = 10)))
-    par(mar=c(2.5, 4, 0.25, 1))
-    if(length(i$index)>1){
-      truc <- apply(data.VarSel$eic[i$index,],2,sum)
-    }else{
-      truc <- data.VarSel$eic[i$index,]
-    }
-    plot(x=x,y=truc,type="l",xlab="Time [min]",ylab="Intensity [AU]",xaxt="n",yaxt="n",col=2)
-    
-    axis(side = 2,
-             labels=c(0,"","","",round(max(truc),-log10(max(truc))+1)),
-             at = seq(from=0,to=max(truc),length.out = 5),las=1,xpd=NA)
-    axis(side = 1,at=round(seq(data.VarSel$range.time[1],data.VarSel$range.time[2],length.out = 10)),
-         labels = round(seq(getTime(data,x[1]*length(cond())),getTime(data,x[length(x)]*length(cond())),length.out = 10)))
-    # mtext(side=4,text="EIC intensity (cps)")
-    leg = c(leg,"selected EIC")
-    col = c(col,"red")
-
-    # legend("topright",legend = leg,lty=1,col=col,cex = 0.7)
-    
-    index.max = x[which.max(truc)]
-    
-  
+  if(length(i$index)>1){
+    layout(cbind(c(1,1,2,2),c(3:6)))
+    ## first the 2 scoreplot top no zoom, bottom zoom
+    par(mar=c(3,3,2,0.5),mgp=c(1.5,0.5,0),yaxs="r", xaxs="r",cex.main=0.9)
+    for(j in c(T,F)){ 
+      Int <- apply(data.VarSel$eic,1,sum)
+      rbPal <- colorRampPalette(c('blue','red'))
+      Col <- rbPal(10)[as.numeric(cut(log10(Int),breaks = 10))]
       
-  ## Averaged full scan
-    # df <- data.frame(x = as.numeric(rownames(data.VarSel$eic)),y = apply(data.VarSel$eic,1,sum))
-    # df <- df[order(df[,2],decreasing = T),]
-    # # if(!is.null(i$xlim)){df = df[df[,1] > i$xlim[1] && df[,1] < i$xlim[2],]}
-    # plot(df,type="h",xlim=if(!is.null(i$xlim)){i$xlim}else{range.mz_full()},ylab="intensity [AU]",xlab=expression(italic(m/z)),ylim=c(0,df[1,2]*1.2),main="Averaged full scan")
-    # text(x=df[1:10,1],y=df[1:10,2],labels=df[1:10,1],pos=3)
+      
+      if(j){
+        xlim = c(min(data.VarSel$model[,1]),max(data.VarSel$model[,1]))
+        ylim = c(min(data.VarSel$model[,2]),max(data.VarSel$model[,2]))
+      }else{
+        xlim = i$x
+        ylim = i$y
+        i$pch = "m/z"
+      }
+      
+      if(is.null(i$pch)){i$pch = "m/z"}
+      
+      if(i$pch == "m/z"){
+        plot(data.VarSel$model,type="n",xlim = xlim, ylim = ylim,xlab="",ylab="")
+        text(data.VarSel$model,labels=rownames(data.VarSel$eic)[data.VarSel$keep],col=Col)
+      }else if(i$pch == "punct"){
+        plot(data.VarSel$model,type="n",xlim = xlim, ylim = ylim,xlab="",ylab="")
+        text(data.VarSel$model,labels=".",col=Col)
+      }else if(i$pch == "circles"){
+        plot(data.VarSel$model,xlim = xlim, ylim = ylim,xlab="",ylab="",col=Col)
+      }
+      
+      title(main="2D cluster map",xlab = "x",ylab="y")
+      ## add the scoreplot_cross if applicable
+      # if(!is.null(input$scroreplot_cross)){
+      #   text(x=data.VarSel$model[input$scroreplot_cross,1],y=data.VarSel$model[input$scroreplot_cross,2],labels="X",col="darkgreen",cex=3)
+      # }
+      ## add the contour
+      my.cols <- rev(RColorBrewer::brewer.pal(11, "RdYlBu"))
+      z <- MASS::kde2d(data.VarSel$model[,1], data.VarSel$model[,2], n=50)
+      # contour(z, drawlabels=FALSE, nlevels=11, col=my.cols, add=TRUE)
+  
+      ## add the selected zone if aplicable
+      if(j){
+        symbols(x=mean(i$x),y=mean(i$y),
+                rectangles = rbind(c(i$x[2]-i$x[1],i$y[2]-i$y[1])),
+                add=T,inches = F,fg="darkgreen",lwd=2)
+      }
+      # legend("bottomright",pch=20,col=Col[c(1,10)],legend = c(min(Int),max(Int)))
+    }
     
-  ## full scan at maximum
-    par(yaxs="i", xaxs="i",mar=c(0.25, 4, 2.5, 1),mgp=c(1.5,0.5,0))
-    data = data.ls()
-    ind = seq(as.numeric(input$mode),length(data),by=length(cond()))[index.max] ## truc refer to the TIC EIC spectrum defined before
-    df = data.frame(x=data[[ind]]$spectrum$mass,y=data[[ind]]$spectrum$intensity)
-    df <- df[order(df[,2],decreasing = T),]
-    # if(!is.null(i$xlim)){df = df[df[,1] > i$xlim[1] && df[,1] < i$xlim[2],]}
-    plot(df,type="h",xlim=if(!is.null(i$xlim)){i$xlim}else{range.mz_full()},ylab="Intensity [AU]",xlab=expression(italic(m/z)),ylim=c(0,df[1,2]*1.2),main="",xaxt="n",yaxt="n")
-    text(x=df[1:10,1],y=df[1:10,2],labels=round(df[1:10,1],5),pos=3)
-    axis(side = 2,
-       labels=c(0,"","","",round(max(df[,2]),-log10(max(df[,2]))+1)),
-       at = seq(from=0,to=max(df[,2]),length.out = 5),las=1)
+    ## TIC and EIC
+      leg = c("TIC")
+      col = c("black")
+      
+      data = data.ls()
+      x=data.VarSel$range.time[1]:data.VarSel$range.time[2]
+      tic = apply(data.VarSel$eic,2,sum)
+      par(mar=c(0.25, 4, 2.5, 1))
+      plot(x=x,y=tic,type="l",xlab="",ylab="Intensity [AU]",xaxt="n",yaxt="n")
+      title(main="TIC",line=1.5)
+      title(main="Selected EIC",line=0.5,col.main=2)
+      axis(side = 2,
+               labels=c(0,"","","",round(max(tic),-log10(max(tic))+1)),
+               at = seq(from=0,to=max(tic),length.out = 5),las=1,xpd=NA)
+      # axis(side = 1,at=round(seq(data.VarSel$range.time[1],data.VarSel$range.time[2],length.out = 10)),
+      #      labels = round(seq(getTime(data,x[1]*length(cond())),getTime(data,x[length(x)]*length(cond())),length.out = 10)))
+      par(mar=c(2.5, 4, 0.25, 1))
+      if(length(i$index)>1){
+        truc <- apply(data.VarSel$eic[i$index,],2,sum)
+      }else{
+        truc <- data.VarSel$eic[i$index,]
+      }
+      plot(x=x,y=truc,type="l",xlab="Time [min]",ylab="Intensity [AU]",xaxt="n",yaxt="n",col=2)
+      
+      axis(side = 2,
+               labels=c(0,"","","",round(max(truc),-log10(max(truc))+1)),
+               at = seq(from=0,to=max(truc),length.out = 5),las=1,xpd=NA)
+      axis(side = 1,at=round(seq(data.VarSel$range.time[1],data.VarSel$range.time[2],length.out = 10)),
+           labels = round(seq(getTime(data,x[1]*length(cond())),getTime(data,x[length(x)]*length(cond())),length.out = 10)))
+      # mtext(side=4,text="EIC intensity (cps)")
+      leg = c(leg,"selected EIC")
+      col = c(col,"red")
+  
+      # legend("topright",legend = leg,lty=1,col=col,cex = 0.7)
+      
+      index.max = x[which.max(truc)]
+      
     
-    title(main=paste0("Full scan at ",getTime(data,ind)," min"),line=1.5)
-    title(main="Selected masses",line=0.5,col.main=2)
-    
-    ## Ion cluster
-    par(mar=c(2.5, 4, 0.25, 1))
-    df <- data.frame(x = as.numeric(rownames(data.VarSel$eic[i$index,])),y = apply(data.VarSel$eic[i$index,],1,sum))
+        
+    ## Averaged full scan
+      # df <- data.frame(x = as.numeric(rownames(data.VarSel$eic)),y = apply(data.VarSel$eic,1,sum))
+      # df <- df[order(df[,2],decreasing = T),]
+      # # if(!is.null(i$xlim)){df = df[df[,1] > i$xlim[1] && df[,1] < i$xlim[2],]}
+      # plot(df,type="h",xlim=if(!is.null(i$xlim)){i$xlim}else{range.mz_full()},ylab="intensity [AU]",xlab=expression(italic(m/z)),ylim=c(0,df[1,2]*1.2),main="Averaged full scan")
+      # text(x=df[1:10,1],y=df[1:10,2],labels=df[1:10,1],pos=3)
+      
+    ## full scan at maximum
+      par(yaxs="i", xaxs="i",mar=c(0.25, 4, 2.5, 1),mgp=c(1.5,0.5,0))
+      data = data.ls()
+      ind = seq(as.numeric(input$mode),length(data),by=length(cond()))[index.max] ## truc refer to the TIC EIC spectrum defined before
+      df = data.frame(x=data[[ind]]$spectrum$mass,y=data[[ind]]$spectrum$intensity)
+      df <- df[order(df[,2],decreasing = T),]
+      # if(!is.null(i$xlim)){df = df[df[,1] > i$xlim[1] && df[,1] < i$xlim[2],]}
+      plot(df,type="h",xlim=if(!is.null(i$xlim)){i$xlim}else{range.mz_full()},ylab="Intensity [AU]",xlab=expression(italic(m/z)),ylim=c(0,df[1,2]*1.2),main="",xaxt="n",yaxt="n")
+      text(x=df[1:10,1],y=df[1:10,2],labels=round(df[1:10,1],5),pos=3)
+      axis(side = 2,
+         labels=c(0,"","","",round(max(df[,2]),-log10(max(df[,2]))+1)),
+         at = seq(from=0,to=max(df[,2]),length.out = 5),las=1)
+      
+      title(main=paste0("Full scan at ",getTime(data,ind)," min"),line=1.5)
+      title(main="Selected masses",line=0.5,col.main=2)
+      
+      ## Ion cluster
+      par(mar=c(2.5, 4, 0.25, 1))
+      df <- data.frame(x = as.numeric(rownames(data.VarSel$eic[i$index,])),y = apply(data.VarSel$eic[i$index,],1,sum))
       df <- df[order(df[,2],decreasing = T),]
       # if(!is.null(i$xlim)){df = df[df[,1] > i$xlim[1] && df[,1] < i$xlim[2],]}
       plot(df,type="h",xlim=if(!is.null(i$xlim)){i$xlim}else{range.mz_full()},
@@ -198,6 +199,11 @@ for(i in as.numeric(input$report_choices)){
       axis(side = 2,
        labels=c(0,"","","",round(max(df[,2]),-log10(max(df[,2]))+1)),
        at = seq(from=0,to=max(df[,2]),length.out = 5),las=1)
+  }else{
+      print("no report if one single ion in the cluster")
+    cat("\n\n\\pagebreak")
+    }
+    
   
 }
 # par(mfrow=c(1,3))
