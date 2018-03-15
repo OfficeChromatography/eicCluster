@@ -200,7 +200,7 @@ for(i in as.numeric(input$report_choices)){
        labels=c(0,"","","",round(max(df[,2]),-log10(max(df[,2]))+1)),
        at = seq(from=0,to=max(df[,2]),length.out = 5),las=1)
   }else{
-      print("no report if one single ion in the cluster")
+      print("no report if one single ion in the cluster, it is not a cluster anyway.")
     cat("\n\n\\pagebreak")
     }
     

@@ -43,11 +43,14 @@ dashboardPage(
               column(6,
                      img(src="pipeline-1.png",width="50%")
                      ),
-              tags$head(tags$style(type="text/css", "tfoot {display: table-header-group}")),
-              tags$head(tags$style(HTML(".shiny-output-error-validation {color: red;font-size: 24px}"))),
-              tags$head(tags$style(type="text/css", ".shiny-progress .progress {position: absolute;width: 100%;top: 100px;height: 10px;margin: 0px;}")),
-              tags$head(tags$style(type="text/css", ".shiny-progress .progress-text {position: absolute;border-style: solid;
-                                                 border-width: 2px;right: 10px;height: 36px;width: 50%;background-color: #EEF8FF;margin: 0px;padding: 2px 3px;opacity: 1;}"))
+              tags$head(
+                tags$link(rel = "stylesheet", type = "text/css", href = "styles.css")
+              )
+              # tags$head(tags$style(type="text/css", "tfoot {display: table-header-group}")),
+              # tags$head(tags$style(HTML(".shiny-output-error-validation {color: red;font-size: 24px}"))),
+              # tags$head(tags$style(type="text/css", ".shiny-progress .progress {position: absolute;width: 100%;top: 100px;height: 10px;margin: 0px;}")),
+              # tags$head(tags$style(type="text/css", ".shiny-progress .progress-text {position: absolute;border-style: solid;
+              #                                    border-width: 2px;right: 10px;height: 36px;width: 50%;background-color: #EEF8FF;margin: 0px;padding: 2px 3px;opacity: 1;}"))
 
       ),
       tabItem(tabName = "Preparation",
