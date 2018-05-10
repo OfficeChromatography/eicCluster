@@ -168,7 +168,7 @@ server <- function(input, output,session) {
 
   ## uiOutput
   output$mode <- renderUI({
-    selectizeInput("mode","select the condition",choices = cond(),select=2)
+    selectizeInput("mode","Select the condition",choices = cond(),select=2)
   })
 
   ## Input
@@ -261,6 +261,7 @@ server <- function(input, output,session) {
     data.VarSel$eic_before_CODA = data.VarSel$eic
     data.VarSel$algo = "None"
     data.VarSel$model = NULL
+    meta$tsne_max_iter =0
     data.VarSel$keep = rep(T,nrow(data.VarSel$eic))
     data.VarSel$range.time = range.time$x
     meta$Int_treshold=input$Int_treshold;meta$range_mz_mini=input$range_mz_mini;meta$range_mz_maxi=input$range_mz_maxi;meta$bucketing_increment=input$bucketing_increment;meta$mode=input$mode
@@ -277,6 +278,8 @@ server <- function(input, output,session) {
     data.VarSel$keep = rep(T,nrow(data.VarSel$eic))
     meta$window_CODA = input$window_CODA;meta$smoothing_CODA=input$smoothing_CODA;meta$threshold_CODA=input$threshold_CODA;meta$apply_CODA=T
     data.VarSel$model = NULL
+    data.VarSel$algo = "None"
+    meta$tsne_max_iter =0
     reported$l = list()
   })
   output$Bucket_dim_1 <- renderUI({
@@ -325,7 +328,17 @@ server <- function(input, output,session) {
   })
   observeEvent(input$reset_tsne,{
     data.VarSel$algo = "None"
-    meta$tsne_max_iter =NULL
+    meta$tsne_max_iter =0
+  })
+
+  output$Clusterisation_feedback_1 <- renderUI({
+    validate(
+      need(data.VarSel$algo != "None","No clusterization done")
+    )
+    tagList(
+      h4(paste0(meta$tsne_max_iter," iterations done"))
+    )
+
   })
 
   ## plot
@@ -363,23 +376,23 @@ server <- function(input, output,session) {
       need(!is.null(data.VarSel$model),"Please do the Clusterisation")
     )
     par(mar=c(2.5, 2.5, 2.5, 1),mgp=c(1.5,0.5,0))
-    if(input$scoreplot_color == "Intensity"){
+    # if(input$scoreplot_color == "Intensity"){
       Int <- apply(data.VarSel$eic[data.VarSel$keep,],1,sum)
       Int = log10(Int)
       pal <- colorRampPalette(c('blue','red'))
       order_col = findInterval(Int, sort(Int))
       Col = pal(length(Int))[order_col]
       # Col <- rbPal(10)[as.numeric(cut(log10(Int),breaks = 10))]
-    }else{
-      Int <- coda(data.VarSel$eic,window = input$window_CODA,smoothing = input$smoothing_CODA)
-      Int[is.nan(Int)] = 0
-      # print(Int)
-      pal <- colorRampPalette(c('blue','red'))
-      order_col = findInterval(Int, sort(Int))
-      Col = pal(length(Int))[order_col]
-      # rbPal <- colorRampPalette(c('blue','red'))
-      # Col <- rbPal(10)[as.numeric(cut(Int,breaks = 10))]
-    }
+    # }else{
+    #   Int <- coda(data.VarSel$eic,window = input$window_CODA,smoothing = input$smoothing_CODA)
+    #   Int[is.nan(Int)] = 0
+    #   # print(Int)
+    #   pal <- colorRampPalette(c('blue','red'))
+    #   order_col = findInterval(Int, sort(Int))
+    #   Col = pal(length(Int))[order_col]
+    #   # rbPal <- colorRampPalette(c('blue','red'))
+    #   # Col <- rbPal(10)[as.numeric(cut(Int,breaks = 10))]
+    # }
 
     if(is.null(range.scoreplot$x)){
       xlim = c(min(data.VarSel$model[data.VarSel$keep,1]),max(data.VarSel$model[data.VarSel$keep,1]))
@@ -581,7 +594,7 @@ server <- function(input, output,session) {
   meta = reactiveValues(Int_treshold=NULL,range_mz_mini=NULL,range_mz_maxi=NULL,bucketing_increment=NULL,mode=NULL,
                         window_CODA = NULL,smoothing_CODA=NULL,threshold_CODA=NULL,apply_CODA=F,
                         preprocess = NULL,
-                        tsne_initial_dims=NULL,tsne_perplexity=NULL,tsne_max_iter=NULL,tsne_whiten=NULL,tsne_pca=NULL,tsne_theta=NULL,kmeans_center=NULL,kmeans_iter_max=NULL)
+                        tsne_initial_dims=NULL,tsne_perplexity=NULL,tsne_max_iter=0,tsne_whiten=NULL,tsne_pca=NULL,tsne_theta=NULL,kmeans_center=NULL,kmeans_iter_max=NULL)
 
   observeEvent(input$Data_2_use,{
     if(input$Data_2_use == "Your_own_data"){ ## do we need to reboot everybody ??

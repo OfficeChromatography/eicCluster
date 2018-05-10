@@ -25,13 +25,5 @@ Then, run this command to launch the application
 eicCluster::run_eicCluster()
 ```
 
-## Use
-
-### Data input
-
-### Preparation
-
-
-### Visualization
 
 
